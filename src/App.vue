@@ -1,30 +1,328 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import { reactive, watch, onMounted, } from 'vue';
+import { encode, decode, } from 'cbor-x';
+import { useClipboard, } from '@vueuse/core';
+import type { AppState, } from './types';
+import { CompressedStateSchema, } from './schemas';
+
+/**
+ * State of the application (mutable version for Vue reactive).
+ */
+const state = reactive({
+  baseUrl: '',
+  paramKey: '',
+  paramValues: [''] as string[],
+});
+
+/**
+ * Helper to compress data using Gzip (CompressionStream).
+ */
+const compressData = async (data: Uint8Array): Promise<Uint8Array> => {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(data);
+      controller.close();
+    },
+  });
+  const compressionStream = new CompressionStream('gzip');
+  const compressedStream = stream.pipeThrough(compressionStream);
+  const reader = compressedStream.getReader();
+  const chunks: Uint8Array[] = [];
+  
+  while (true) {
+    const { done, value, } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  
+  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+};
+
+/**
+ * Helper to decompress data using Gzip (DecompressionStream).
+ */
+const decompressData = async (data: Uint8Array): Promise<Uint8Array> => {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(data);
+      controller.close();
+    },
+  });
+  const decompressionStream = new DecompressionStream('gzip');
+  const decompressedStream = stream.pipeThrough(decompressionStream);
+  const reader = decompressedStream.getReader();
+  const chunks: Uint8Array[] = [];
+  
+  while (true) {
+    const { done, value, } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  
+  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+};
+
+/**
+ * Helper to convert Uint8Array to Base64 string safely for URLs.
+ */
+const toBase64 = (arr: Uint8Array): string => {
+  const binary = Array.from(arr).map((b) => String.fromCharCode(b)).join('');
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+/**
+ * Helper to convert Base64 string back to Uint8Array.
+ */
+const fromBase64 = (base64: string): Uint8Array => {
+  const normalized = base64.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+/**
+ * Compress and save state to URL hash.
+ */
+const saveStateToHash = async () => {
+  try {
+    const data: AppState = {
+      baseUrl: state.baseUrl,
+      paramKey: state.paramKey,
+      paramValues: state.paramValues.filter((v) => v.trim() !== ''),
+    };
+
+    const cborData = encode({
+      b: data.baseUrl,
+      k: data.paramKey,
+      v: data.paramValues,
+    });
+
+    const compressed = await compressData(cborData);
+    const hash = toBase64(compressed);
+    window.history.replaceState(null, '', `#${hash}`);
+  } catch (e) {
+    console.error('Failed to save state:', e);
+  }
+};
+
+/**
+ * Load state from URL hash.
+ */
+const loadStateFromHash = async () => {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+
+  try {
+    const compressed = fromBase64(hash);
+    const decompressed = await decompressData(compressed);
+    const rawDecoded = decode(decompressed);
+    
+    const parseResult = CompressedStateSchema.safeParse(rawDecoded);
+    
+    if (parseResult.success) {
+      const decoded = parseResult.data;
+      state.baseUrl = decoded.b || '';
+      state.paramKey = decoded.k || '';
+      state.paramValues = decoded.v && decoded.v.length > 0 ? [...decoded.v] : [''];
+    } else {
+      console.error('Invalid state data:', parseResult.error);
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e);
+  }
+};
+
+/**
+ * Watch for changes and update hash.
+ */
+watch(state, () => {
+  saveStateToHash();
+}, { deep: true, });
+
+/**
+ * UI Actions.
+ */
+const addValue = () => {
+  state.paramValues.push('');
+};
+
+const removeValue = (index: number) => {
+  if (state.paramValues.length > 1) {
+    state.paramValues.splice(index, 1);
+  } else {
+    state.paramValues[0] = '';
+  }
+};
+
+/**
+ * Core logic to open a URL with a specific parameter.
+ */
+const openSingleUrl = (val: string) => {
+  const { baseUrl, paramKey, } = state;
+  if (!baseUrl || !paramKey || !val.trim()) return;
+
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.append(paramKey, val.trim());
+    // Open in new tab without referrer
+    window.open(url.toString(), '_blank', 'noreferrer');
+  } catch (e) {
+    console.error(`Invalid URL: ${baseUrl}`, e);
+  }
+};
+
+const openAll = () => {
+  const { baseUrl, paramKey, paramValues, } = state;
+  if (!baseUrl || !paramKey) {
+    alert('Please enter Base URL and Query Parameter Key.');
+    return;
+  }
+
+  paramValues.forEach((val) => {
+    openSingleUrl(val);
+  });
+};
+
+const { copy, copied, } = useClipboard();
+const copyShareLink = () => {
+  copy(window.location.href);
+};
+
+onMounted(() => {
+  loadStateFromHash();
+});
 </script>
 
 <template>
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+  <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
+    <div class="max-w-3xl mx-auto">
+      <header class="mb-8 text-center">
+        <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">
+          Multi Query Opener
+        </h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Open multiple URLs at once with different query parameters. State is saved in the URL fragment.
+        </p>
+      </header>
+
+      <main class="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
+        <!-- Configuration Section -->
+        <section class="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
+          <div>
+            <label for="base-url" class="block text-sm font-semibold text-gray-700 mb-1">Base URL</label>
+            <input
+              id="base-url"
+              v-model="state.baseUrl"
+              type="url"
+              placeholder="https://example.com/search"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+            />
+          </div>
+          <div>
+            <label for="param-key" class="block text-sm font-semibold text-gray-700 mb-1">Query Parameter Name</label>
+            <input
+              id="param-key"
+              v-model="state.paramKey"
+              type="text"
+              placeholder="q"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+            />
+          </div>
+        </section>
+
+        <!-- Values Section -->
+        <section class="mb-8">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-gray-700">Query Parameter Values</h2>
+            <button
+              @click="addValue"
+              type="button"
+              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Add Input
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div
+              v-for="(_, index) in state.paramValues"
+              :key="index"
+              class="relative flex items-start gap-2"
+            >
+              <div class="flex-1 relative">
+                <textarea
+                  v-model="state.paramValues[index]"
+                  rows="2"
+                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10"
+                  placeholder="Enter value..."
+                ></textarea>
+                <button
+                  @click="removeValue(index)"
+                  class="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                  title="Remove"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                @click="openSingleUrl(state.paramValues[index]!)"
+                type="button"
+                title="Open in new tab"
+                class="mt-1 p-2.5 rounded-md border border-gray-300 text-gray-500 hover:text-indigo-600 hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Action Section -->
+        <div class="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">
+          <button
+            @click="openAll"
+            type="button"
+            class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Open All in New Tabs
+          </button>
+          <button
+            @click="copyShareLink"
+            type="button"
+            class="inline-flex justify-center items-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            {{ copied ? 'Copied!' : 'Copy Shareable Link' }}
+          </button>
+        </div>
+      </main>
+      
+      <footer class="mt-8 text-center text-xs text-gray-500">
+        All data is stored in the URL fragment after being encoded with CBOR and compressed with Gzip.
+      </footer>
+    </div>
   </div>
-  <HelloWorld msg="Vite + Vue" />
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
+<style>
+/* Base styles already handled by Tailwind */
 </style>

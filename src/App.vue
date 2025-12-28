@@ -5,6 +5,11 @@ import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import { useSortable, } from '@vueuse/integrations/useSortable';
 import type { AppState, } from './types';
 import { StorageStateSchema, } from './schemas';
+import DragHandleIcon from './components/icons/DragHandleIcon.vue';
+import RemoveIcon from './components/icons/RemoveIcon.vue';
+import OpenIcon from './components/icons/OpenIcon.vue';
+import ErrorIcon from './components/icons/ErrorIcon.vue';
+import CloseIcon from './components/icons/CloseIcon.vue';
 
 /**
  * State of the application (mutable version for Vue reactive).
@@ -343,9 +348,7 @@ onMounted(() => {
         <div class="flex items-start justify-between">
           <div class="flex">
             <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
+              <ErrorIcon class="text-red-400" />
             </div>
             <div class="ml-3">
               <p class="text-sm text-red-700 font-medium">
@@ -369,9 +372,7 @@ onMounted(() => {
             @click="errorMessage = null"
             class="ml-auto pl-3 text-red-500 hover:text-red-600"
           >
-            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-            </svg>
+            <CloseIcon />
           </button>
         </div>
       </div>
@@ -431,9 +432,7 @@ onMounted(() => {
               class="relative flex items-start gap-2 group"
             >
               <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
-                </svg>
+                <DragHandleIcon />
               </div>
               <div class="flex-1 relative">
                 <textarea
@@ -447,9 +446,7 @@ onMounted(() => {
                   class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
                   title="Remove"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                  </svg>
+                  <RemoveIcon />
                 </button>
               </div>
               <button
@@ -458,9 +455,7 @@ onMounted(() => {
                 title="Open in new tab"
                 class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-600 dark:hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
+                <OpenIcon />
               </button>
             </div>
           </div>

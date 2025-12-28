@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch, onMounted, } from 'vue';
+import { reactive, ref, watch, onMounted, computed, } from 'vue';
 import { encode, decode, } from 'cbor-x';
 import { useClipboard, } from '@vueuse/core';
 import type { AppState, } from './types';
@@ -132,6 +132,7 @@ const saveStateToHash = async () => {
     const compressed = await compressData(cborData);
     const hash = toBase64(compressed);
     window.history.replaceState(null, '', `#${hash}`);
+    updateUrlLength();
   } catch (e) {
     console.error('Failed to save state:', e);
   }
@@ -173,6 +174,8 @@ const loadStateFromHash = async () => {
     } else {
       errorDetails.value = String(e);
     }
+  } finally {
+    updateUrlLength();
   }
 };
 
@@ -252,6 +255,28 @@ const { copy, copied, } = useClipboard();
 const copyShareLink = () => {
   copy(window.location.href);
 };
+
+/**
+ * Current URL length for user reference.
+ */
+const currentUrlLength = ref(0);
+
+/**
+ * Update the URL length based on window.location.href.
+ */
+const updateUrlLength = () => {
+  currentUrlLength.value = window.location.href.length;
+};
+
+/**
+ * Visual color for URL length.
+ */
+const urlLengthClass = computed(() => {
+  const length = currentUrlLength.value;
+  if (length > 2000) return 'text-orange-600 bg-orange-50 border-orange-200';
+  if (length > 4000) return 'text-red-600 bg-red-50 border-red-200';
+  return 'text-gray-500 bg-gray-50 border-gray-200';
+});
 
 onMounted(() => {
   loadStateFromHash();
@@ -402,6 +427,19 @@ onMounted(() => {
           >
             {{ copied ? 'Copied!' : 'Copy Shareable Link' }}
           </button>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <div
+            :class="urlLengthClass"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
+            title="Current URL character length"
+          >
+            <svg class="mr-1.5 h-2 w-2" :class="urlLengthClass.split(' ')[0]" fill="currentColor" viewBox="0 0 8 8">
+              <circle cx="4" cy="4" r="3" />
+            </svg>
+            URL Length: {{ currentUrlLength }} characters
+          </div>
         </div>
       </main>
       

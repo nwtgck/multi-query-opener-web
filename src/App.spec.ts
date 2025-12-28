@@ -55,78 +55,142 @@ describe('App.vue', () => {
     document.title = '';
   });
 
-  it('renders correctly', () => {
-    const wrapper = mount(App);
-    expect(wrapper.find('[data-testid="app-title"]').text()).toContain('Multi Query Opener');
-    expect(wrapper.find('[data-testid="page-title-input"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="base-url-input"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="param-key-input"]').exists()).toBe(true);
+  describe('Initial rendering', () => {
+    it('renders correctly', () => {
+      const wrapper = mount(App);
+      expect(wrapper.find('[data-testid="app-title"]').text()).toContain('Multi Query Opener');
+      expect(wrapper.find('[data-testid="page-title-input"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="base-url-input"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="param-key-input"]').exists()).toBe(true);
+    });
   });
 
-  it('updates state and document title when inputs change', async () => {
-    const wrapper = mount(App);
+  describe('State updates', () => {
+    it('updates state and document title when inputs change', async () => {
+      const wrapper = mount(App);
 
-    const titleInput = wrapper.find('[data-testid="page-title-input"]');
-    await titleInput.setValue('My Custom Title');
+      const titleInput = wrapper.find('[data-testid="page-title-input"]');
+      await titleInput.setValue('My Custom Title');
 
-    expect(document.title).toBe('My Custom Title');
-    expect(wrapper.find('[data-testid="app-title"]').text()).toBe('My Custom Title');
+      expect(document.title).toBe('My Custom Title');
+      expect(wrapper.find('[data-testid="app-title"]').text()).toBe('My Custom Title');
+    });
   });
 
-  it('shows validation error when required fields are missing', async () => {
-    const wrapper = mount(App);
-    
-    // Ensure fields are empty
-    await wrapper.find('[data-testid="base-url-input"]').setValue('');
-    await wrapper.find('[data-testid="param-key-input"]').setValue('');
+  describe('Validation', () => {
+    it('shows validation error when required fields are missing', async () => {
+      const wrapper = mount(App);
+      
+      // Ensure fields are empty
+      await wrapper.find('[data-testid="base-url-input"]').setValue('');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('');
 
-    // Click Open All
-    const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
-    await openAllBtn.trigger('click');
+      // Click Open All
+      const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
+      await openAllBtn.trigger('click');
 
-    // Check for error message
-    expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Please enter both Base URL');
+      // Check for error message
+      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain('Please enter both Base URL');
+    });
+
+    it('shows error when opening a single URL with empty value', async () => {
+      const wrapper = mount(App);
+      
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
+      
+      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      await textareas[0]!.setValue(' '); // whitespace only
+
+      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain('Please enter a value for the query parameter');
+    });
+
+    it('shows error when base URL is invalid', async () => {
+      const wrapper = mount(App);
+      
+      await wrapper.find('[data-testid="base-url-input"]').setValue('invalid-url');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
+      
+      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      await textareas[0]!.setValue('test');
+
+      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain('Invalid Base URL');
+    });
   });
 
-  it('opens URLs when inputs are valid', async () => {
-    const wrapper = mount(App);
-    
-    // Set valid inputs
-    await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
-    await wrapper.find('[data-testid="param-key-input"]').setValue('q');
-    
-    const textareas = wrapper.findAll('[data-testid="param-value-input"]');
-    await textareas[0]!.setValue('test-query');
+  describe('URL opening', () => {
+    it('opens all URLs when inputs are valid', async () => {
+      const wrapper = mount(App);
+      
+      // Set valid inputs
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
+      
+      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      await textareas[0]!.setValue('test-query');
 
-    // Mock open to return a window object (success)
-    mockOpen.mockReturnValue({} as Window);
+      // Mock open success
+      mockOpen.mockReturnValue({} as Window);
 
-    // Click Open All
-    const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
-    await openAllBtn.trigger('click');
+      // Click Open All
+      const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
+      await openAllBtn.trigger('click');
 
-    expect(mockOpen).toHaveBeenCalled();
-    const calledUrl = mockOpen.mock.calls[0]![0];
-    expect(calledUrl).toContain('https://example.com');
-    expect(calledUrl).toContain('q=test-query');
-    expect(mockOpen).toHaveBeenCalledWith(expect.any(String), '_blank', 'noreferrer');
+      expect(mockOpen).toHaveBeenCalled();
+      const calledUrl = mockOpen.mock.calls[0]![0];
+      expect(calledUrl).toContain('https://example.com');
+      expect(calledUrl).toContain('q=test-query');
+      expect(mockOpen).toHaveBeenCalledWith(expect.any(String), '_blank', 'noreferrer');
+    });
+
+    it('opens a single URL when the individual open button is clicked', async () => {
+      const wrapper = mount(App);
+      
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.org');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('id');
+      
+      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      await textareas[0]!.setValue('12345');
+
+      // Mock success
+      mockOpen.mockReturnValue({} as Window);
+
+      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
+      await openSingleBtn.trigger('click');
+
+      expect(mockOpen).toHaveBeenCalledWith(
+        'https://example.org/?id=12345',
+        '_blank',
+        'noreferrer',
+      );
+    });
   });
 
-  it('adds and removes parameter values', async () => {
-    const wrapper = mount(App);
-    
-    // Initial state: 1 textarea
-    expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
+  describe('List operations', () => {
+    it('adds and removes parameter values', async () => {
+      const wrapper = mount(App);
+      
+      // Initial state: 1 textarea
+      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
 
-    // Add input
-    const addBtn = wrapper.find('[data-testid="add-input-btn"]');
-    await addBtn.trigger('click');
-    expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(2);
+      // Add input
+      const addBtn = wrapper.find('[data-testid="add-input-btn"]');
+      await addBtn.trigger('click');
+      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(2);
 
-    // Remove input
-    const removeBtns = wrapper.findAll('[data-testid="remove-value-btn"]');
-    await removeBtns[0]!.trigger('click');
-    expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
+      // Remove input
+      const removeBtns = wrapper.findAll('[data-testid="remove-value-btn"]');
+      await removeBtns[0]!.trigger('click');
+      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
+    });
   });
 });

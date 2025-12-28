@@ -226,42 +226,68 @@ const removeValue = (index: number) => {
 };
 
 /**
+ * Validate base configuration.
+ */
+const validateConfig = (): boolean => {
+  if (!state.baseUrl.trim() || !state.paramKey.trim()) {
+    errorMessage.value = 'Please enter both Base URL and Query Parameter Name.';
+    errorDetails.value = null;
+    return false;
+  }
+  return true;
+};
+
+/**
  * Core logic to open a URL with a specific parameter.
  * Returns true if opened successfully, false if blocked.
  */
 const openSingleUrl = (val: string): boolean => {
-  const {baseUrl, paramKey, } = state;
-  if (!baseUrl || !paramKey || !val.trim()) return false;
+  errorMessage.value = null;
+  
+  if (!validateConfig()) return false;
+
+  if (!val.trim()) {
+    errorMessage.value = 'Please enter a value for the query parameter.';
+    return false;
+  }
 
   try {
-    const url = new URL(baseUrl);
-    url.searchParams.append(paramKey, val.trim());
+    const url = new URL(state.baseUrl);
+    url.searchParams.append(state.paramKey, val.trim());
     // Open in new tab without referrer
     const win = window.open(url.toString(), '_blank', 'noreferrer');
     return win !== null;
   } catch (e) {
-    console.error(`Invalid URL: ${baseUrl}`, e);
+    console.error(`Invalid URL: ${state.baseUrl}`, e);
+    errorMessage.value = `Invalid Base URL: ${state.baseUrl}`;
     return false;
   }
 };
 
 const openAll = () => {
-  const {baseUrl, paramKey, paramValues, } = state;
-  if (!baseUrl || !paramKey) {
-    alert('Please enter Base URL and Query Parameter Key.');
+  errorMessage.value = null;
+
+  if (!validateConfig()) return;
+
+  const activeValues = state.paramValues.filter((v) => v.trim() !== '');
+  if (activeValues.length === 0) {
+    errorMessage.value = 'Please enter at least one query parameter value.';
     return;
   }
 
   let blockedCount = 0;
   let openedCount = 0;
 
-  paramValues.forEach((val) => {
-    if (!val.trim()) return;
+  activeValues.forEach((val) => {
     const success = openSingleUrl(val);
     if (success) {
       openedCount++;
     } else {
-      blockedCount++;
+      // If validateConfig failed inside openSingleUrl (unlikely here)
+      // or if it was blocked by popup blocker
+      if (!errorMessage.value) {
+        blockedCount++;
+      }
     }
   });
 
@@ -269,9 +295,6 @@ const openAll = () => {
     alert(
       `${blockedCount} tabs were blocked by your browser.\n\nPlease allow pop-ups for this site in your browser settings (look for an icon in the address bar) and try again.`, 
     );
-  } else if (openedCount === 0 && paramValues.some(v => v.trim())) {
-    // Fallback if browser returns null even for the first one or logic fails oddly
-     alert('Failed to open tabs. Please check your browser popup settings.');
   }
 };
 

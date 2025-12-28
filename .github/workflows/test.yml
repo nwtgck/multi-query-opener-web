@@ -13,10 +13,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: multi-query-opener/package-lock.json
       - name: Install dependencies
         run: npm ci
-        working-directory: multi-query-opener
       - name: Run tests
         run: npm test
-        working-directory: multi-query-opener

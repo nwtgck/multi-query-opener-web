@@ -2,6 +2,7 @@
 import { reactive, ref, onMounted, computed, watch, } from 'vue';
 import { encode, decode, } from 'cbor-x';
 import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
+import { useSortable, } from '@vueuse/integrations/useSortable';
 import type { AppState, } from './types';
 import { StorageStateSchema, } from './schemas';
 
@@ -164,7 +165,10 @@ const loadStateFromHash = async () => {
       state.title = decoded.title || 'Multi Query Opener';
       state.baseUrl = decoded.baseUrl || '';
       state.paramKey = decoded.paramKey || '';
-      state.paramValues = decoded.paramValues && decoded.paramValues.length > 0 ? [...decoded.paramValues] : [''];
+      
+      const newValues = decoded.paramValues && decoded.paramValues.length > 0 ? [...decoded.paramValues] : [''];
+      // Use splice to maintain the array reference for useSortable
+      state.paramValues.splice(0, state.paramValues.length, ...newValues);
     } else {
       console.error('Invalid state data:', parseResult.error);
       errorMessage.value = 'Failed to load settings from URL due to validation errors.';
@@ -273,6 +277,13 @@ const copyShareLink = () => {
 
 const colorMode = useColorMode({
   initialValue: 'auto',
+});
+
+const paramListRef = ref<HTMLElement | null>(null);
+
+useSortable(paramListRef, state.paramValues, {
+  handle: '.drag-handle',
+  animation: 150,
 });
 
 /**
@@ -413,12 +424,17 @@ onMounted(() => {
             </button>
           </div>
           
-          <div class="space-y-4">
+          <div ref="paramListRef" class="space-y-4">
             <div
               v-for="(_, index) in state.paramValues"
               :key="index"
-              class="relative flex items-start gap-2"
+              class="relative flex items-start gap-2 group"
             >
+              <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+                </svg>
+              </div>
               <div class="flex-1 relative">
                 <textarea
                   v-model="state.paramValues[index]"

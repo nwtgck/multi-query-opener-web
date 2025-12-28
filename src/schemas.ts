@@ -1,19 +1,15 @@
 import { z, } from 'zod';
 
 /**
- * Schema for the shortened property names used in storage to save space.
- */
-export const CompressedStateSchema = z.object({
-  b: z.string().optional(),
-  k: z.string().optional(),
-  v: z.array(z.string()).optional(),
-});
-
-/**
- * Schema for the full application state.
+ * Schema for the application state used in storage and runtime.
  */
 export const AppStateSchema = z.object({
   baseUrl: z.string(),
   paramKey: z.string(),
   paramValues: z.array(z.string()),
 });
+
+/**
+ * For storage, we use the same structure now.
+ */
+export const StorageStateSchema = AppStateSchema;

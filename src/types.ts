@@ -1,6 +1,6 @@
 import { z, } from 'zod';
-import { AppStateSchema, CompressedStateSchema, } from './schemas';
+import { AppStateSchema, StorageStateSchema, } from './schemas';
 
 export type AppState = Readonly<z.infer<typeof AppStateSchema>>;
 
-export type CompressedState = Readonly<z.infer<typeof CompressedStateSchema>>;
+export type StorageState = Readonly<z.infer<typeof StorageStateSchema>>;

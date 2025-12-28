@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { reactive, watch, onMounted, } from 'vue';
+import { reactive, ref, watch, onMounted, } from 'vue';
 import { encode, decode, } from 'cbor-x';
 import { useClipboard, } from '@vueuse/core';
 import type { AppState, } from './types';
-import { CompressedStateSchema, } from './schemas';
+import { StorageStateSchema, } from './schemas';
 
 /**
  * State of the application (mutable version for Vue reactive).
@@ -13,6 +13,21 @@ const state = reactive({
   paramKey: '',
   paramValues: [''] as string[],
 });
+
+/**
+ * Error message to display in the UI.
+ */
+const errorMessage = ref<string | null>(null);
+
+/**
+ * Detailed error information (e.g., Zod validation errors).
+ */
+const errorDetails = ref<string | null>(null);
+
+/**
+ * Whether the error details are expanded.
+ */
+const isErrorExpanded = ref(false);
 
 /**
  * Helper to compress data using Gzip (CompressionStream).
@@ -109,9 +124,9 @@ const saveStateToHash = async () => {
     };
 
     const cborData = encode({
-      b: data.baseUrl,
-      k: data.paramKey,
-      v: data.paramValues,
+      baseUrl: data.baseUrl,
+      paramKey: data.paramKey,
+      paramValues: data.paramValues,
     });
 
     const compressed = await compressData(cborData);
@@ -129,23 +144,35 @@ const loadStateFromHash = async () => {
   const hash = window.location.hash.slice(1);
   if (!hash) return;
 
+  errorMessage.value = null;
+  errorDetails.value = null;
+  isErrorExpanded.value = false;
+
   try {
     const compressed = fromBase64(hash);
     const decompressed = await decompressData(compressed);
     const rawDecoded = decode(decompressed);
     
-    const parseResult = CompressedStateSchema.safeParse(rawDecoded);
+    const parseResult = StorageStateSchema.safeParse(rawDecoded);
     
     if (parseResult.success) {
       const decoded = parseResult.data;
-      state.baseUrl = decoded.b || '';
-      state.paramKey = decoded.k || '';
-      state.paramValues = decoded.v && decoded.v.length > 0 ? [...decoded.v] : [''];
+      state.baseUrl = decoded.baseUrl || '';
+      state.paramKey = decoded.paramKey || '';
+      state.paramValues = decoded.paramValues && decoded.paramValues.length > 0 ? [...decoded.paramValues] : [''];
     } else {
       console.error('Invalid state data:', parseResult.error);
+      errorMessage.value = 'Failed to load settings from URL due to validation errors.';
+      errorDetails.value = JSON.stringify(parseResult.error.format(), null, 2);
     }
   } catch (e) {
     console.error('Failed to load state:', e);
+    errorMessage.value = 'Failed to load settings from URL. The link might be broken or invalid.';
+    if (e instanceof Error) {
+      errorDetails.value = e.message + '\n' + e.stack;
+    } else {
+      errorDetails.value = String(e);
+    }
   }
 };
 
@@ -176,7 +203,7 @@ const removeValue = (index: number) => {
  * Returns true if opened successfully, false if blocked.
  */
 const openSingleUrl = (val: string): boolean => {
-  const { baseUrl, paramKey, } = state;
+  const {baseUrl, paramKey, } = state;
   if (!baseUrl || !paramKey || !val.trim()) return false;
 
   try {
@@ -192,7 +219,7 @@ const openSingleUrl = (val: string): boolean => {
 };
 
 const openAll = () => {
-  const { baseUrl, paramKey, paramValues, } = state;
+  const {baseUrl, paramKey, paramValues, } = state;
   if (!baseUrl || !paramKey) {
     alert('Please enter Base URL and Query Parameter Key.');
     return;
@@ -213,7 +240,7 @@ const openAll = () => {
 
   if (blockedCount > 0) {
     alert(
-      `${blockedCount} tabs were blocked by your browser.\n\nPlease allow pop-ups for this site in your browser settings (look for an icon in the address bar) and try again.`,
+      `${blockedCount} tabs were blocked by your browser.\n\nPlease allow pop-ups for this site in your browser settings (look for an icon in the address bar) and try again.`, 
     );
   } else if (openedCount === 0 && paramValues.some(v => v.trim())) {
     // Fallback if browser returns null even for the first one or logic fails oddly
@@ -242,6 +269,47 @@ onMounted(() => {
           Open multiple URLs at once with different query parameters. State is saved in the URL fragment.
         </p>
       </header>
+
+      <!-- Error Message Section -->
+      <div
+        v-if="errorMessage"
+        class="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded shadow-sm"
+      >
+        <div class="flex items-start justify-between">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-red-700 font-medium">
+                {{ errorMessage }}
+              </p>
+              <div v-if="errorDetails" class="mt-2">
+                <button
+                  @click="isErrorExpanded = !isErrorExpanded"
+                  class="text-xs text-red-600 hover:text-red-800 underline focus:outline-none"
+                >
+                  {{ isErrorExpanded ? 'Hide Details' : 'Show Details' }}
+                </button>
+                <pre
+                  v-if="isErrorExpanded"
+                  class="mt-2 text-xs text-red-800 bg-red-100 p-2 rounded overflow-x-auto whitespace-pre-wrap font-mono border border-red-200"
+                >{{ errorDetails }}</pre>
+              </div>
+            </div>
+          </div>
+          <button
+            @click="errorMessage = null"
+            class="ml-auto pl-3 text-red-500 hover:text-red-600"
+          >
+            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <main class="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
         <!-- Configuration Section -->

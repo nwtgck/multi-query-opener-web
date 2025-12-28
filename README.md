@@ -3,6 +3,8 @@
 > [!NOTE]
 > Most of this project was created by Gemini 3 with significantly less human review than my usual projects.
 
+* https://multi-query-opener.pages.dev/
+
 A serverless tool to open multiple URLs with different query parameters at once.
 The entire application state is compressed and stored in the URL fragment, making it easy to share your configurations.
 

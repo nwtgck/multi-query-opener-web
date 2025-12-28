@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed, watch, } from 'vue';
-import { encode, decode, } from 'cbor-x';
+import * as CBOR from 'cbor-x';
 import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import { useSortable, } from '@vueuse/integrations/useSortable';
 import type { AppState, } from './types';
@@ -131,7 +131,7 @@ const saveStateToHash = async () => {
       paramValues: state.paramValues.filter((v) => v.trim() !== ''),
     };
 
-    const cborData = encode({
+    const cborData = CBOR.encode({
       title: data.title,
       baseUrl: data.baseUrl,
       paramKey: data.paramKey,
@@ -161,7 +161,7 @@ const loadStateFromHash = async () => {
   try {
     const compressed = fromBase64(hash);
     const decompressed = await decompressData(compressed);
-    const rawDecoded = decode(decompressed);
+    const rawDecoded = CBOR.decode(decompressed);
     
     const parseResult = StorageStateSchema.safeParse(rawDecoded);
     
@@ -278,7 +278,7 @@ const openAll = () => {
   let blockedCount = 0;
   let openedCount = 0;
 
-  activeValues.forEach((val) => {
+  for (const val of activeValues) {
     const success = openSingleUrl(val);
     if (success) {
       openedCount++;
@@ -289,7 +289,7 @@ const openAll = () => {
         blockedCount++;
       }
     }
-  });
+  }
 
   if (blockedCount > 0) {
     alert(

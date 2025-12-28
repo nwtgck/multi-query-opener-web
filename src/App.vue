@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref, watch, onMounted, computed, } from 'vue';
+import { reactive, ref, onMounted, computed, } from 'vue';
 import { encode, decode, } from 'cbor-x';
-import { useClipboard, } from '@vueuse/core';
+import { useClipboard, watchDebounced, } from '@vueuse/core';
 import type { AppState, } from './types';
 import { StorageStateSchema, } from './schemas';
 
@@ -180,11 +180,15 @@ const loadStateFromHash = async () => {
 };
 
 /**
- * Watch for changes and update hash.
+ * Watch for changes and update hash (debounced).
  */
-watch(state, () => {
-  saveStateToHash();
-}, { deep: true, });
+watchDebounced(
+  state,
+  () => {
+    saveStateToHash();
+  },
+  { debounce: 500, deep: true, },
+);
 
 /**
  * UI Actions.

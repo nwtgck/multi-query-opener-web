@@ -6,7 +6,7 @@ import App from './App.vue';
 class MockCompressionStream {
   readable = new ReadableStream();
   writable = new WritableStream({
-    write(chunk, controller) {
+    write(_chunk, _controller) {
       // Pass through for simple testing
     },
   });
@@ -15,7 +15,7 @@ class MockCompressionStream {
 class MockDecompressionStream {
   readable = new ReadableStream();
   writable = new WritableStream({
-    write(chunk, controller) {
+    write(_chunk, _controller) {
       // Pass through
     },
   });
@@ -45,8 +45,8 @@ Object.defineProperty(window.history, 'replaceState', {
   writable: true,
 });
 
-global.CompressionStream = MockCompressionStream as any;
-global.DecompressionStream = MockDecompressionStream as any;
+globalThis.CompressionStream = MockCompressionStream as any;
+globalThis.DecompressionStream = MockDecompressionStream as any;
 
 describe('App.vue', () => {
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe('App.vue', () => {
 
     // Click Open All
     const openAllBtn = wrapper.findAll('button').find(b => b.text().includes('Open All'));
-    await openAllBtn?.trigger('click');
+    await openAllBtn!.trigger('click');
 
     // Check for error message
     expect(wrapper.find('.text-red-700').exists()).toBe(true);
@@ -104,7 +104,7 @@ describe('App.vue', () => {
 
     // Click Open All
     const openAllBtn = wrapper.findAll('button').find(b => b.text().includes('Open All'));
-    await openAllBtn?.trigger('click');
+    await openAllBtn!.trigger('click');
 
     expect(mockOpen).toHaveBeenCalled();
     const calledUrl = mockOpen.mock.calls[0][0];
@@ -121,13 +121,13 @@ describe('App.vue', () => {
 
     // Add input
     const addBtn = wrapper.findAll('button').find(b => b.text().includes('Add Input'));
-    await addBtn?.trigger('click');
+    await addBtn!.trigger('click');
     expect(wrapper.findAll('textarea').length).toBe(2);
 
     // Remove input (click remove button of the first item)
     // The remove button is the one with title="Remove"
     const removeBtns = wrapper.findAll('button[title="Remove"]');
-    await removeBtns[0].trigger('click');
+    await removeBtns[0]!.trigger('click');
     expect(wrapper.findAll('textarea').length).toBe(1);
   });
 });

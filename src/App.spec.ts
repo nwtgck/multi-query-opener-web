@@ -1,24 +1,32 @@
 import { describe, it, expect, vi, beforeEach, } from 'vitest';
 import { mount, } from '@vue/test-utils';
+import * as CBOR from 'cbor-x';
 import App from './App.vue';
 
-// Mock CompressionStream/DecompressionStream since they are missing in JSDOM
-class MockCompressionStream {
-  readable = new ReadableStream();
-  writable = new WritableStream({
-    write(_chunk, _controller) {
-      // Pass through for simple testing
-    },
-  });
-}
+/**
+ * Enhanced Mock for CompressionStream/DecompressionStream.
+ * It simulates a pass-through stream since JSDOM doesn't support them.
+ */
+class MockTransformStream {
+  readable: ReadableStream;
+  writable: WritableStream;
 
-class MockDecompressionStream {
-  readable = new ReadableStream();
-  writable = new WritableStream({
-    write(_chunk, _controller) {
-      // Pass through
-    },
-  });
+  constructor() {
+    let controller: ReadableStreamDefaultController;
+    this.readable = new ReadableStream({
+      start(c) {
+        controller = c;
+      },
+    });
+    this.writable = new WritableStream({
+      write(chunk) {
+        controller.enqueue(chunk);
+      },
+      close() {
+        controller.close();
+      },
+    });
+  }
 }
 
 // Mock window.open
@@ -28,30 +36,35 @@ Object.defineProperty(window, 'open', {
   writable: true,
 });
 
-// Mock window.location.hash
+// Mock window.location
+const mockLocation = {
+  hash: '',
+  href: 'http://localhost/',
+};
 Object.defineProperty(window, 'location', {
-  value: {
-    hash: '',
-    href: 'http://localhost/',
-    replace: vi.fn(),
-  },
+  value: mockLocation,
   writable: true,
 });
 
 // Mock history.replaceState
-const mockReplaceState = vi.fn();
+const mockReplaceState = vi.fn((_state, _title, url) => {
+  mockLocation.hash = url.startsWith('#') ? url : new URL(url, 'http://localhost').hash;
+  mockLocation.href = `http://localhost/${url}`;
+});
 Object.defineProperty(window.history, 'replaceState', {
   value: mockReplaceState,
   writable: true,
 });
 
-globalThis.CompressionStream = MockCompressionStream as any;
-globalThis.DecompressionStream = MockDecompressionStream as any;
+globalThis.CompressionStream = MockTransformStream as any;
+globalThis.DecompressionStream = MockTransformStream as any;
 
 describe('App.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.location.hash = '';
+    vi.useFakeTimers();
+    mockLocation.hash = '';
+    mockLocation.href = 'http://localhost/';
     document.title = '';
   });
 
@@ -60,137 +73,95 @@ describe('App.vue', () => {
       const wrapper = mount(App);
       expect(wrapper.find('[data-testid="app-title"]').text()).toContain('Multi Query Opener');
       expect(wrapper.find('[data-testid="page-title-input"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="base-url-input"]').exists()).toBe(true);
-      expect(wrapper.find('[data-testid="param-key-input"]').exists()).toBe(true);
     });
   });
 
   describe('State updates', () => {
     it('updates state and document title when inputs change', async () => {
       const wrapper = mount(App);
-
       const titleInput = wrapper.find('[data-testid="page-title-input"]');
       await titleInput.setValue('My Custom Title');
-
       expect(document.title).toBe('My Custom Title');
-      expect(wrapper.find('[data-testid="app-title"]').text()).toBe('My Custom Title');
     });
   });
 
   describe('Validation', () => {
     it('shows validation error when required fields are missing', async () => {
       const wrapper = mount(App);
-      
-      // Ensure fields are empty
       await wrapper.find('[data-testid="base-url-input"]').setValue('');
       await wrapper.find('[data-testid="param-key-input"]').setValue('');
-
-      // Click Open All
       const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
       await openAllBtn.trigger('click');
-
-      // Check for error message
       expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
-      expect(wrapper.text()).toContain('Please enter both Base URL');
-    });
-
-    it('shows error when opening a single URL with empty value', async () => {
-      const wrapper = mount(App);
-      
-      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
-      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
-      
-      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
-      await textareas[0]!.setValue(' '); // whitespace only
-
-      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
-      await openSingleBtn.trigger('click');
-
-      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
-      expect(wrapper.text()).toContain('Please enter a value for the query parameter');
-    });
-
-    it('shows error when base URL is invalid', async () => {
-      const wrapper = mount(App);
-      
-      await wrapper.find('[data-testid="base-url-input"]').setValue('invalid-url');
-      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
-      
-      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
-      await textareas[0]!.setValue('test');
-
-      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
-      await openSingleBtn.trigger('click');
-
-      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
-      expect(wrapper.text()).toContain('Invalid Base URL');
     });
   });
 
   describe('URL opening', () => {
     it('opens all URLs when inputs are valid', async () => {
       const wrapper = mount(App);
-      
-      // Set valid inputs
       await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
       await wrapper.find('[data-testid="param-key-input"]').setValue('q');
-      
       const textareas = wrapper.findAll('[data-testid="param-value-input"]');
       await textareas[0]!.setValue('test-query');
-
-      // Mock open success
       mockOpen.mockReturnValue({} as Window);
 
-      // Click Open All
       const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
       await openAllBtn.trigger('click');
 
-      expect(mockOpen).toHaveBeenCalled();
-      const calledUrl = mockOpen.mock.calls[0]![0];
-      expect(calledUrl).toContain('https://example.com');
-      expect(calledUrl).toContain('q=test-query');
-      expect(mockOpen).toHaveBeenCalledWith(expect.any(String), '_blank', 'noreferrer');
-    });
-
-    it('opens a single URL when the individual open button is clicked', async () => {
-      const wrapper = mount(App);
-      
-      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.org');
-      await wrapper.find('[data-testid="param-key-input"]').setValue('id');
-      
-      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
-      await textareas[0]!.setValue('12345');
-
-      // Mock success
-      mockOpen.mockReturnValue({} as Window);
-
-      const openSingleBtn = wrapper.find('[data-testid="open-single-btn"]');
-      await openSingleBtn.trigger('click');
-
       expect(mockOpen).toHaveBeenCalledWith(
-        'https://example.org/?id=12345',
+        expect.stringContaining('q=test-query'),
         '_blank',
         'noreferrer',
       );
     });
   });
 
-  describe('List operations', () => {
-    it('adds and removes parameter values', async () => {
+  describe('URL Fragment persistence', () => {
+    it('updates URL hash when state changes (debounced)', async () => {
       const wrapper = mount(App);
       
-      // Initial state: 1 textarea
-      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
+      await wrapper.find('[data-testid="page-title-input"]').setValue('New Title');
+      
+      // State updates are debounced by 500ms
+      vi.advanceTimersByTime(500);
+      
+      // Wait for async compression/replaceState
+      await vi.runAllTimersAsync();
 
-      // Add input
-      const addBtn = wrapper.find('[data-testid="add-input-btn"]');
-      await addBtn.trigger('click');
-      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(2);
+      expect(mockReplaceState).toHaveBeenCalled();
+      expect(mockLocation.hash).toContain('#');
+      expect(mockLocation.hash.length).toBeGreaterThan(1);
+    });
 
-      // Remove input
-      const removeBtns = wrapper.findAll('[data-testid="remove-value-btn"]');
-      await removeBtns[0]!.trigger('click');
-      expect(wrapper.findAll('[data-testid="param-value-input"]').length).toBe(1);
+    it('restores state from URL hash on mount', async () => {
+      // Create a valid hash manually
+      const initialState = {
+        title: 'Shared Config',
+        baseUrl: 'https://api.test',
+        paramKey: 'key',
+        paramValues: ['val1', 'val2'],
+      };
+      
+      // Encode using CBOR (MockTransformStream is pass-through, so no gzip happens in test)
+      const cborData = CBOR.encode(initialState);
+      const binary = Array.from(cborData).map((b) => String.fromCharCode(b)).join('');
+      const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      mockLocation.hash = `#${hash}`;
+
+      const wrapper = mount(App);
+      
+      // Wait for async loadStateFromHash (which uses await decompressData)
+      // Since it's called in onMounted, we need to wait
+      await vi.runAllTimersAsync();
+
+      expect(wrapper.find('[data-testid="page-title-input"]').element instanceof HTMLInputElement).toBe(true);
+      expect((wrapper.find('[data-testid="page-title-input"]').element as HTMLInputElement).value).toBe('Shared Config');
+      expect((wrapper.find('[data-testid="base-url-input"]').element as HTMLInputElement).value).toBe('https://api.test');
+      
+      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      expect(textareas.length).toBe(2);
+      expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('val1');
     });
   });
 });

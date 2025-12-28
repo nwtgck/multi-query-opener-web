@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, computed, } from 'vue';
+import { reactive, ref, onMounted, computed, watch, } from 'vue';
 import { encode, decode, } from 'cbor-x';
 import { useClipboard, watchDebounced, } from '@vueuse/core';
 import type { AppState, } from './types';
@@ -9,6 +9,7 @@ import { StorageStateSchema, } from './schemas';
  * State of the application (mutable version for Vue reactive).
  */
 const state = reactive({
+  title: 'Multi Query Opener',
   baseUrl: '',
   paramKey: '',
   paramValues: [''] as string[],
@@ -118,12 +119,14 @@ const fromBase64 = (base64: string): Uint8Array => {
 const saveStateToHash = async () => {
   try {
     const data: AppState = {
+      title: state.title,
       baseUrl: state.baseUrl,
       paramKey: state.paramKey,
       paramValues: state.paramValues.filter((v) => v.trim() !== ''),
     };
 
     const cborData = encode({
+      title: data.title,
       baseUrl: data.baseUrl,
       paramKey: data.paramKey,
       paramValues: data.paramValues,
@@ -158,6 +161,7 @@ const loadStateFromHash = async () => {
     
     if (parseResult.success) {
       const decoded = parseResult.data;
+      state.title = decoded.title || 'Multi Query Opener';
       state.baseUrl = decoded.baseUrl || '';
       state.paramKey = decoded.paramKey || '';
       state.paramValues = decoded.paramValues && decoded.paramValues.length > 0 ? [...decoded.paramValues] : [''];
@@ -178,6 +182,13 @@ const loadStateFromHash = async () => {
     updateUrlLength();
   }
 };
+
+/**
+ * Sync page title with document.title.
+ */
+watch(() => state.title, (newTitle) => {
+  document.title = newTitle;
+}, { immediate: true, });
 
 /**
  * Watch for changes and update hash (debounced).
@@ -292,7 +303,7 @@ onMounted(() => {
     <div class="max-w-3xl mx-auto">
       <header class="mb-8 text-center">
         <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">
-          Multi Query Opener
+          {{ state.title || 'Multi Query Opener' }}
         </h1>
         <p class="mt-2 text-sm text-gray-600">
           Open multiple URLs at once with different query parameters. State is saved in the URL fragment.
@@ -343,6 +354,16 @@ onMounted(() => {
       <main class="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
         <!-- Configuration Section -->
         <section class="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
+          <div class="sm:col-span-2">
+            <label for="page-title" class="block text-sm font-semibold text-gray-700 mb-1">Page Title</label>
+            <input
+              id="page-title"
+              v-model="state.title"
+              type="text"
+              placeholder="Enter page title..."
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+            />
+          </div>
           <div>
             <label for="base-url" class="block text-sm font-semibold text-gray-700 mb-1">Base URL</label>
             <input

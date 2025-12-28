@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed, watch, } from 'vue';
 import { encode, decode, } from 'cbor-x';
-import { useClipboard, watchDebounced, } from '@vueuse/core';
+import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import type { AppState, } from './types';
 import { StorageStateSchema, } from './schemas';
 
@@ -271,6 +271,10 @@ const copyShareLink = () => {
   copy(window.location.href);
 };
 
+const colorMode = useColorMode({
+  initialValue: 'auto',
+});
+
 /**
  * Current URL length for user reference.
  */
@@ -299,13 +303,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 font-sans transition-colors duration-200">
     <div class="max-w-3xl mx-auto">
-      <header class="mb-8 text-center">
-        <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">
+      <header class="mb-8 text-center relative">
+        <div class="absolute right-0 top-0">
+          <select
+            v-model="colorMode"
+            class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+          >
+            <option value="auto">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
           {{ state.title || 'Multi Query Opener' }}
         </h1>
-        <p class="mt-2 text-sm text-gray-600">
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Open multiple URLs at once with different query parameters. State is saved in the URL fragment.
         </p>
       </header>
@@ -351,37 +365,37 @@ onMounted(() => {
         </div>
       </div>
 
-      <main class="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
+      <main class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
         <!-- Configuration Section -->
         <section class="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
           <div class="sm:col-span-2">
-            <label for="page-title" class="block text-sm font-semibold text-gray-700 mb-1">Page Title</label>
+            <label for="page-title" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Page Title</label>
             <input
               id="page-title"
               v-model="state.title"
               type="text"
               placeholder="Enter page title..."
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+              class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
           </div>
           <div>
-            <label for="base-url" class="block text-sm font-semibold text-gray-700 mb-1">Base URL</label>
+            <label for="base-url" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
             <input
               id="base-url"
               v-model="state.baseUrl"
               type="url"
               placeholder="https://example.com/search"
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+              class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
           </div>
           <div>
-            <label for="param-key" class="block text-sm font-semibold text-gray-700 mb-1">Query Parameter Name</label>
+            <label for="param-key" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Query Parameter Name</label>
             <input
               id="param-key"
               v-model="state.paramKey"
               type="text"
               placeholder="q"
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
+              class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             />
           </div>
         </section>
@@ -389,7 +403,7 @@ onMounted(() => {
         <!-- Values Section -->
         <section class="mb-8">
           <div class="flex items-center justify-between mb-2">
-            <h2 class="text-sm font-semibold text-gray-700">Query Parameter Values</h2>
+            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Query Parameter Values</h2>
             <button
               @click="addValue"
               type="button"
@@ -409,12 +423,12 @@ onMounted(() => {
                 <textarea
                   v-model="state.paramValues[index]"
                   rows="2"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10"
+                  class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                   placeholder="Enter value..."
                 ></textarea>
                 <button
                   @click="removeValue(index)"
-                  class="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                  class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
                   title="Remove"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -426,7 +440,7 @@ onMounted(() => {
                 @click="openSingleUrl(state.paramValues[index]!)"
                 type="button"
                 title="Open in new tab"
-                class="mt-1 p-2.5 rounded-md border border-gray-300 text-gray-500 hover:text-indigo-600 hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
+                class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-600 dark:hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -437,18 +451,18 @@ onMounted(() => {
         </section>
 
         <!-- Action Section -->
-        <div class="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">
+        <div class="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100 dark:border-gray-700">
           <button
             @click="openAll"
             type="button"
-            class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             Open All in New Tabs
           </button>
           <button
             @click="copyShareLink"
             type="button"
-            class="inline-flex justify-center items-center px-6 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            class="inline-flex justify-center items-center px-6 py-3 border border-gray-300 dark:border-gray-600 shadow-sm text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             {{ copied ? 'Copied!' : 'Copy Shareable Link' }}
           </button>

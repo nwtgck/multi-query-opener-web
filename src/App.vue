@@ -348,6 +348,7 @@ onMounted(() => {
         <div class="absolute right-0 top-0">
           <select
             v-model="colorMode"
+            data-testid="color-mode-select"
             class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
           >
             <option value="auto">System</option>
@@ -355,7 +356,7 @@ onMounted(() => {
             <option value="dark">Dark</option>
           </select>
         </div>
-        <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+        <h1 data-testid="app-title" class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
           {{ state.title || 'Multi Query Opener' }}
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -366,6 +367,7 @@ onMounted(() => {
       <!-- Error Message Section -->
       <div
         v-if="errorMessage"
+        data-testid="error-alert"
         class="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded shadow-sm"
       >
         <div class="flex items-start justify-between">
@@ -408,6 +410,7 @@ onMounted(() => {
             <input
               id="page-title"
               v-model="state.title"
+              data-testid="page-title-input"
               type="text"
               placeholder="Enter page title..."
               class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
@@ -418,6 +421,7 @@ onMounted(() => {
             <input
               id="base-url"
               v-model="state.baseUrl"
+              data-testid="base-url-input"
               type="url"
               placeholder="https://example.com/search"
               class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
@@ -428,6 +432,7 @@ onMounted(() => {
             <input
               id="param-key"
               v-model="state.paramKey"
+              data-testid="param-key-input"
               type="text"
               placeholder="q"
               class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
@@ -441,6 +446,7 @@ onMounted(() => {
             <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Query Parameter Values</h2>
             <button
               @click="addValue"
+              data-testid="add-input-btn"
               type="button"
               class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
@@ -453,6 +459,7 @@ onMounted(() => {
               v-for="(_, index) in state.paramValues"
               :key="index"
               class="relative flex items-start gap-2 group"
+              data-testid="param-item"
             >
               <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
                 <DragHandleIcon />
@@ -461,11 +468,13 @@ onMounted(() => {
                 <textarea
                   v-model="state.paramValues[index]"
                   rows="2"
+                  data-testid="param-value-input"
                   class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                   placeholder="Enter value..."
                 ></textarea>
                 <button
                   @click="removeValue(index)"
+                  data-testid="remove-value-btn"
                   class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
                   title="Remove"
                 >
@@ -476,6 +485,7 @@ onMounted(() => {
                 @click="openSingleUrl(state.paramValues[index]!)"
                 type="button"
                 title="Open in new tab"
+                data-testid="open-single-btn"
                 class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-600 dark:hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
               >
                 <OpenIcon />
@@ -489,6 +499,7 @@ onMounted(() => {
           <button
             @click="openAll"
             type="button"
+            data-testid="open-all-btn"
             class="flex-1 inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             Open All in New Tabs
@@ -496,6 +507,7 @@ onMounted(() => {
           <button
             @click="copyShareLink"
             type="button"
+            data-testid="copy-link-btn"
             class="inline-flex justify-center items-center px-6 py-3 border border-gray-300 dark:border-gray-600 shadow-sm text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             {{ copied ? 'Copied!' : 'Copy Shareable Link' }}
@@ -505,6 +517,7 @@ onMounted(() => {
         <div class="mt-4 flex justify-end">
           <div
             :class="urlLengthClass"
+            data-testid="url-length-display"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
             title="Current URL character length"
           >

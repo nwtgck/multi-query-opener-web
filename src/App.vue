@@ -173,18 +173,21 @@ const removeValue = (index: number) => {
 
 /**
  * Core logic to open a URL with a specific parameter.
+ * Returns true if opened successfully, false if blocked.
  */
-const openSingleUrl = (val: string) => {
+const openSingleUrl = (val: string): boolean => {
   const { baseUrl, paramKey, } = state;
-  if (!baseUrl || !paramKey || !val.trim()) return;
+  if (!baseUrl || !paramKey || !val.trim()) return false;
 
   try {
     const url = new URL(baseUrl);
     url.searchParams.append(paramKey, val.trim());
     // Open in new tab without referrer
-    window.open(url.toString(), '_blank', 'noreferrer');
+    const win = window.open(url.toString(), '_blank', 'noreferrer');
+    return win !== null;
   } catch (e) {
     console.error(`Invalid URL: ${baseUrl}`, e);
+    return false;
   }
 };
 
@@ -195,9 +198,27 @@ const openAll = () => {
     return;
   }
 
+  let blockedCount = 0;
+  let openedCount = 0;
+
   paramValues.forEach((val) => {
-    openSingleUrl(val);
+    if (!val.trim()) return;
+    const success = openSingleUrl(val);
+    if (success) {
+      openedCount++;
+    } else {
+      blockedCount++;
+    }
   });
+
+  if (blockedCount > 0) {
+    alert(
+      `${blockedCount} tabs were blocked by your browser.\n\nPlease allow pop-ups for this site in your browser settings (look for an icon in the address bar) and try again.`,
+    );
+  } else if (openedCount === 0 && paramValues.some(v => v.trim())) {
+    // Fallback if browser returns null even for the first one or logic fails oddly
+     alert('Failed to open tabs. Please check your browser popup settings.');
+  }
 };
 
 const { copy, copied, } = useClipboard();

@@ -10,6 +10,12 @@ import RemoveIcon from './components/icons/RemoveIcon.vue';
 import OpenIcon from './components/icons/OpenIcon.vue';
 import ErrorIcon from './components/icons/ErrorIcon.vue';
 import CloseIcon from './components/icons/CloseIcon.vue';
+import {
+  compressData,
+  decompressData,
+  toBase64,
+  fromBase64,
+} from './utils';
 
 /**
  * State of the application (mutable version for Vue reactive).
@@ -18,7 +24,7 @@ const state = reactive({
   title: 'Multi Query Opener',
   baseUrl: '',
   paramKey: '',
-  paramValues: [''] as string[],
+  paramValues: [''],
 });
 
 /**
@@ -35,89 +41,6 @@ const errorDetails = ref<string | null>(null);
  * Whether the error details are expanded.
  */
 const isErrorExpanded = ref(false);
-
-/**
- * Helper to compress data using Gzip (CompressionStream).
- */
-const compressData = async (data: Uint8Array): Promise<Uint8Array> => {
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(data);
-      controller.close();
-    },
-  });
-  const compressionStream = new CompressionStream('gzip');
-  const compressedStream = stream.pipeThrough(compressionStream);
-  const reader = compressedStream.getReader();
-  const chunks: Uint8Array[] = [];
-  
-  while (true) {
-    const { done, value, } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
-};
-
-/**
- * Helper to decompress data using Gzip (DecompressionStream).
- */
-const decompressData = async (data: Uint8Array): Promise<Uint8Array> => {
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(data);
-      controller.close();
-    },
-  });
-  const decompressionStream = new DecompressionStream('gzip');
-  const decompressedStream = stream.pipeThrough(decompressionStream);
-  const reader = decompressedStream.getReader();
-  const chunks: Uint8Array[] = [];
-  
-  while (true) {
-    const { done, value, } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
-};
-
-/**
- * Helper to convert Uint8Array to Base64 string safely for URLs.
- */
-const toBase64 = (arr: Uint8Array): string => {
-  const binary = Array.from(arr).map((b) => String.fromCharCode(b)).join('');
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-};
-
-/**
- * Helper to convert Base64 string back to Uint8Array.
- */
-const fromBase64 = (base64: string): Uint8Array => {
-  const normalized = base64.replace(/-/g, '+').replace(/_/g, '/');
-  const binary = atob(normalized);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-};
 
 /**
  * Compress and save state to URL hash.

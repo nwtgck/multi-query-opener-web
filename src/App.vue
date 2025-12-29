@@ -88,13 +88,22 @@ const loadStateFromHash = async () => {
     
     if (parseResult.success) {
       const data = parseResult.data;
+      
+      // Normalize data: convert legacy strings to ID-based objects
+      const normalizedParamValues: ParamItem[] = data.paramValues.map(item => {
+        if (typeof item === 'string') {
+          return { id: nextId(), value: item };
+        }
+        return item as ParamItem;
+      });
+
       // Sync ID counter with loaded data
-      syncIdCounter(data.paramValues as ParamItem[]);
+      syncIdCounter(normalizedParamValues);
       
       state.title = data.title;
       state.baseUrl = data.baseUrl;
       state.paramKey = data.paramKey;
-      state.paramValues.splice(0, state.paramValues.length, ...data.paramValues);
+      state.paramValues.splice(0, state.paramValues.length, ...normalizedParamValues);
     }
   } catch (e) {
     console.error('Failed to load state:', e);

@@ -29,15 +29,19 @@ export const ParamItemDtoSchema = z.union([
 
 /**
  * Optimized DTO for the entire application state.
+ * Supports legacy string array for backward compatibility during parsing.
  */
 export const AppStateDtoSchema = z.object({
   title: z.string(),
   baseUrl: z.string(),
   paramKey: z.string(),
-  paramValues: z.array(ParamItemDtoSchema),
+  paramValues: z.array(z.union([
+    ParamItemDtoSchema,
+    z.string(), // Legacy support for simple strings
+  ])),
 });
 
 /**
- * Final storage schema (Breaking change: legacy support removed for extreme optimization).
+ * Storage schema.
  */
 export const StorageStateDtoSchema = AppStateDtoSchema;

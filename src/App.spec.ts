@@ -154,5 +154,30 @@ describe('App.vue', () => {
       expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('val1');
       expect((textareas[1]!.element as HTMLTextAreaElement).value).toBe('val2');
     });
+
+    it('restores state from legacy string array', async () => {
+      const legacyState = {
+        title: 'Legacy Test',
+        baseUrl: 'https://legacy.io',
+        paramKey: 'q',
+        paramValues: ['legacy1', 'legacy2'],
+      };
+      
+      const cborData = CBOR.encode(legacyState);
+      const binary = Array.from(cborData).map((b) => String.fromCharCode(b)).join('');
+      const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      mockLocation.hash = `#${hash}`;
+
+      const wrapper = mount(App);
+      await flushPromises();
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://legacy.io');
+      const textareas = wrapper.findAll('textarea');
+      expect(textareas.length).toBe(2);
+      expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('legacy1');
+      expect((textareas[1]!.element as HTMLTextAreaElement).value).toBe('legacy2');
+    });
   });
 });

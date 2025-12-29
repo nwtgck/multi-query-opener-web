@@ -189,10 +189,9 @@ describe('App.vue', () => {
           { id: 1, value: 'val1' },
           { 
             id: 2, 
-            type: 'group', 
             name: 'Group 1', 
-            expanded: true, 
             values: [{ id: 3, value: 'val2' }] 
+            // expanded: true is omitted in optimized DTO
           }
         ],
       };

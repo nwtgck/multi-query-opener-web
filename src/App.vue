@@ -9,6 +9,7 @@ import type {
   ParamValue, 
   ParamGroup, 
   AppState,
+  StorageStateDto,
 } from './types';
 import DragHandleIcon from './components/icons/DragHandleIcon.vue';
 import RemoveIcon from './components/icons/RemoveIcon.vue';
@@ -76,9 +77,35 @@ const findAndRemoveItemData = (id: number): ParamItem | null => {
   return null;
 };
 
+/**
+ * Convert Runtime State to DTO for storage.
+ * - Removes 'type' from groups.
+ * - expanded: true is omitted (undefined), expanded: false is kept.
+ */
+const toDto = () => {
+  return {
+    title: state.title,
+    baseUrl: state.baseUrl,
+    paramKey: state.paramKey,
+    paramValues: state.paramValues.map(item => {
+      if ('type' in item && item.type === 'group') {
+        return {
+          id: item.id,
+          name: item.name,
+          values: item.values,
+          // Only store if false, otherwise leave undefined to save space
+          expanded: item.expanded ? undefined : (false as const),
+        };
+      }
+      return item;
+    }),
+  };
+};
+
 const saveStateToHash = async () => {
   try {
-    const cborData = CBOR.encode(state);
+    const dto = toDto();
+    const cborData = CBOR.encode(dto);
     const compressed = await compressData(cborData);
     const hash = toBase64(compressed);
     window.history.replaceState(null, '', `#${hash}`);
@@ -86,6 +113,40 @@ const saveStateToHash = async () => {
   } catch (e) {
     console.error('Failed to save state:', e);
   }
+};
+
+/**
+ * Convert DTO to Runtime State.
+ */
+const fromDto = (data: StorageStateDto): AppState => {
+  const paramValues = data.paramValues.map((item): ParamItem => {
+    if (typeof item === 'string') return { id: nextId(), value: item };
+    
+    // Check if it's a group (it has 'values' array but no 'type' anymore)
+    if ('values' in item) {
+      return {
+        id: item.id,
+        type: 'group',
+        name: item.name,
+        // expanded: undefined -> true, expanded: false -> false
+        expanded: item.expanded !== false,
+        values: item.values.map((v): ParamValue => ({ 
+          id: v.id, 
+          value: v.value 
+        })),
+      };
+    }
+    
+    // It's a single value
+    return { id: item.id, value: item.value };
+  });
+
+  return {
+    title: data.title,
+    baseUrl: data.baseUrl,
+    paramKey: data.paramKey,
+    paramValues: paramValues.length > 0 ? paramValues : [{ id: nextId(), value: '' }],
+  };
 };
 
 const loadStateFromHash = async () => {
@@ -103,16 +164,12 @@ const loadStateFromHash = async () => {
     const parseResult = StorageStateDtoSchema.safeParse(rawDecoded);
     
     if (parseResult.success) {
-      const data = parseResult.data;
-      const normalizedParamValues: ParamItem[] = data.paramValues.map(item => {
-        if (typeof item === 'string') return { id: nextId(), value: item };
-        return item as ParamItem;
-      });
-      syncIdCounter(normalizedParamValues);
-      state.title = data.title;
-      state.baseUrl = data.baseUrl;
-      state.paramKey = data.paramKey;
-      state.paramValues.splice(0, state.paramValues.length, ...normalizedParamValues);
+      const normalized = fromDto(parseResult.data);
+      syncIdCounter(normalized.paramValues);
+      state.title = normalized.title;
+      state.baseUrl = normalized.baseUrl;
+      state.paramKey = normalized.paramKey;
+      state.paramValues.splice(0, state.paramValues.length, ...normalized.paramValues);
     }
   } catch (e) {
     console.error('Failed to load state:', e);
@@ -222,7 +279,7 @@ const openAll = () => {
 
   let blockedCount = 0;
   activeValues.forEach(val => {
-    const success = openSingleUrl(val, true); // Suppress individual errors
+    const success = openSingleUrl(val, true);
     if (!success) blockedCount++;
   });
 
@@ -413,7 +470,7 @@ const urlLengthClass = computed(() => {
         >
           <summary class="cursor-pointer text-center list-none hover:text-indigo-500 transition-colors focus:outline-none">Debug State (JSON)</summary>
           <div v-if="isDebugOpen" class="mt-2 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-inner overflow-auto max-h-60">
-            <pre class="text-[10px] font-mono whitespace-pre-wrap text-gray-600 dark:text-gray-400">{{ JSON.stringify(state, null, 2) }}</pre>
+            <pre class="text-[10px] font-mono whitespace-pre-wrap text-gray-600 dark:text-gray-400">{{ JSON.stringify(toDto(), null, 2) }}</pre>
           </div>
         </details>
       </footer>

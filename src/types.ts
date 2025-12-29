@@ -7,14 +7,14 @@ import {
   StorageStateDtoSchema,
 } from './schemas';
 
-// DTO Types (Persistence / Transfer)
+// DTO Types (Persistence / Transfer) - Optimized for size
 export type ParamValueDto = Readonly<z.infer<typeof ParamValueDtoSchema>>;
 export type ParamGroupDto = Readonly<z.infer<typeof ParamGroupDtoSchema>>;
 export type ParamItemDto = Readonly<z.infer<typeof ParamItemDtoSchema>>;
 export type AppStateDto = Readonly<z.infer<typeof AppStateDtoSchema>>;
 export type StorageStateDto = Readonly<z.infer<typeof StorageStateDtoSchema>>;
 
-// Runtime State Types (Mutable for Vue Reactivity)
+// Runtime State Types (Ideal form for UI/Reactivity)
 export type ParamValue = {
   id: number,
   value: string,

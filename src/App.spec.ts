@@ -120,6 +120,65 @@ describe('App.vue', () => {
     });
   });
 
+  describe('Error reporting', () => {
+    it('shows error when configuration is missing', async () => {
+      const wrapper = mount(App);
+      const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
+      
+      // Clear inputs
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue(''); // Base URL
+      await inputs[2]!.setValue(''); // Param Key
+      
+      await openAllBtn?.trigger('click');
+      expect(wrapper.text()).toContain('Please enter both Base URL and Query Parameter Name');
+    });
+
+    it('shows error when popups are blocked', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue('https://example.com');
+      await inputs[2]!.setValue('q');
+      await wrapper.find('textarea').setValue('test');
+
+      // Simulate popup blocked
+      mockOpen.mockReturnValue(null);
+
+      const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
+      await openAllBtn?.trigger('click');
+
+      expect(wrapper.text()).toContain('tabs were blocked by your browser');
+    });
+
+    it('shows singular error when an individual popup is blocked', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue('https://example.com');
+      await inputs[2]!.setValue('q');
+      await wrapper.find('textarea').setValue('test');
+
+      // Simulate popup blocked
+      mockOpen.mockReturnValue(null);
+
+      // Find the individual open button (the one with the OpenIcon/title)
+      const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.text()).toContain('The tab was blocked by your browser');
+    });
+
+    it('shows configuration error when individual button is clicked without config', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue(''); // No Base URL
+      
+      const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.text()).toContain('Please enter both Base URL and Query Parameter Name');
+    });
+  });
+
   describe('Persistence', () => {
     it('restores state with numeric IDs from URL hash', async () => {
       const initialState = {

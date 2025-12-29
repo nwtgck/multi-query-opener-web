@@ -13,6 +13,8 @@ import type {
 import DragHandleIcon from './components/icons/DragHandleIcon.vue';
 import RemoveIcon from './components/icons/RemoveIcon.vue';
 import OpenIcon from './components/icons/OpenIcon.vue';
+import ErrorIcon from './components/icons/ErrorIcon.vue';
+import CloseIcon from './components/icons/CloseIcon.vue';
 import ChevronIcon from './components/icons/ChevronIcon.vue';
 import {
   compressData,
@@ -41,11 +43,10 @@ const isReady = ref(false);
  */
 const hasData = () => {
   if (state.baseUrl.trim() !== '' || state.paramKey.trim() !== '') return true;
-  // If there's more than one item, or the first item isn't just an empty default value
   if (state.paramValues.length > 1) return true;
   const first = state.paramValues[0];
   if (!first) return false;
-  if ('type' in first) return true; // It's a group
+  if ('type' in first) return true;
   if (first.value.trim() !== '') return true;
   return false;
 };
@@ -103,18 +104,11 @@ const loadStateFromHash = async () => {
     
     if (parseResult.success) {
       const data = parseResult.data;
-      
-      // Normalize data: convert legacy strings to ID-based objects
       const normalizedParamValues: ParamItem[] = data.paramValues.map(item => {
-        if (typeof item === 'string') {
-          return { id: nextId(), value: item };
-        }
+        if (typeof item === 'string') return { id: nextId(), value: item };
         return item as ParamItem;
       });
-
-      // Sync ID counter with loaded data
       syncIdCounter(normalizedParamValues);
-      
       state.title = data.title;
       state.baseUrl = data.baseUrl;
       state.paramKey = data.paramKey;
@@ -122,8 +116,7 @@ const loadStateFromHash = async () => {
     }
   } catch (e) {
     console.error('Failed to load state:', e);
-    errorMessage.value = 'Failed to load settings (breaking change applied).';
-    state.paramValues = [{ id: nextId(), value: '' }];
+    errorMessage.value = 'Failed to load settings from URL.';
   } finally {
     updateUrlLength();
   }
@@ -134,15 +127,10 @@ watchDebounced(
   state, 
   () => { 
     if (!isReady.value) return;
-    
     if (!hasData()) {
-      // If no meaningful data, ensure URL hash is empty
-      if (window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
+      if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
       return;
     }
-    
     saveStateToHash(); 
   }, 
   { debounce: 500, deep: true }
@@ -183,27 +171,64 @@ const removeValueFromGroup = (groupId: number, valueId: number) => {
   }
 };
 
-const openSingleUrl = (val: string) => {
-  if (!state.baseUrl.trim() || !state.paramKey.trim() || !val.trim()) return;
+const validateConfig = (): boolean => {
+  if (!state.baseUrl.trim() || !state.paramKey.trim()) {
+    errorMessage.value = 'Please enter both Base URL and Query Parameter Name.';
+    return false;
+  }
+  return true;
+};
+
+const openSingleUrl = (val: string, suppressError = false): boolean => {
+  if (!suppressError) errorMessage.value = null;
+  if (!validateConfig()) return false;
+  if (!val.trim()) {
+    if (!suppressError) errorMessage.value = 'Please enter a value for the query parameter.';
+    return false;
+  }
+
   try {
     const url = new URL(state.baseUrl);
     url.searchParams.append(state.paramKey, val.trim());
-    window.open(url.toString(), '_blank', 'noreferrer');
+    const win = window.open(url.toString(), '_blank', 'noreferrer');
+    if (win === null) {
+      if (!suppressError) errorMessage.value = 'The tab was blocked by your browser. Please allow pop-ups for this site.';
+      return false;
+    }
+    return true;
   } catch (e) {
-    errorMessage.value = 'Invalid URL configuration.';
+    if (!suppressError) errorMessage.value = 'Invalid Base URL configuration.';
+    return false;
   }
 };
 
 const openAll = () => {
-  const vals: string[] = [];
+  errorMessage.value = null;
+  if (!validateConfig()) return;
+
+  const activeValues: string[] = [];
   state.paramValues.forEach(item => {
     if ('type' in item && item.type === 'group') {
-      item.values.forEach(v => { if (v.value.trim()) vals.push(v.value); });
+      item.values.forEach(v => { if (v.value.trim()) activeValues.push(v.value); });
     } else {
-      if ((item as ParamValue).value.trim()) vals.push((item as ParamValue).value);
+      if ((item as ParamValue).value.trim()) activeValues.push((item as ParamValue).value);
     }
   });
-  vals.forEach(openSingleUrl);
+
+  if (activeValues.length === 0) {
+    errorMessage.value = 'Please enter at least one query parameter value.';
+    return;
+  }
+
+  let blockedCount = 0;
+  activeValues.forEach(val => {
+    const success = openSingleUrl(val, true); // Suppress individual errors
+    if (!success) blockedCount++;
+  });
+
+  if (blockedCount > 0) {
+    errorMessage.value = `${blockedCount} tabs were blocked by your browser. Please allow pop-ups for this site.`;
+  }
 };
 
 const { copy, copied } = useClipboard();
@@ -235,7 +260,6 @@ const sortableOptions: Sortable.Options = {
 const paramListRef = ref<HTMLElement | null>(null);
 onMounted(async () => {
   await loadStateFromHash();
-  
   if (paramListRef.value) {
     Sortable.create(paramListRef.value, {
       ...sortableOptions,
@@ -243,11 +267,7 @@ onMounted(async () => {
       onAdd: (evt) => syncSortable(evt, state.paramValues),
     });
   }
-
-  // Ensure reactivity settles before enabling the watcher
-  nextTick(() => {
-    isReady.value = true;
-  });
+  nextTick(() => { isReady.value = true; });
 });
 
 const vSortableGroup = {
@@ -288,10 +308,26 @@ const urlLengthClass = computed(() => {
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Organize query values into groups and drag to reorder.</p>
       </header>
 
-      <div v-if="errorMessage" class="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded shadow-sm flex items-start">
-        <p class="text-sm text-red-700 dark:text-red-400 font-medium flex-1">{{ errorMessage }}</p>
-        <button @click="errorMessage = null" class="ml-auto text-red-500">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+      <!-- Error Message Section -->
+      <div
+        v-if="errorMessage"
+        class="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded shadow-sm flex items-start justify-between"
+      >
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <ErrorIcon class="text-red-400 w-5 h-5" />
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-red-700 dark:text-red-400 font-medium">
+              {{ errorMessage }}
+            </p>
+          </div>
+        </div>
+        <button
+          @click="errorMessage = null"
+          class="ml-auto pl-3 text-red-500 hover:text-red-600 focus:outline-none"
+        >
+          <CloseIcon class="w-5 h-5" />
         </button>
       </div>
 

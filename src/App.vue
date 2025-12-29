@@ -160,7 +160,7 @@ const loadStateFromHash = async () => {
   try {
     const compressed = fromBase64(hash);
     const decompressed = await decompressData(compressed);
-    const rawDecoded = CBOR.decode(decompressed);
+    const rawDecoded: unknown = CBOR.decode(decompressed);
     const parseResult = StorageStateDtoSchema.safeParse(rawDecoded);
     
     if (parseResult.success) {
@@ -292,18 +292,31 @@ const { copy, copied } = useClipboard();
 const copyShareLink = () => copy(window.location.href);
 const colorMode = useColorMode({ initialValue: 'auto' });
 
-const syncSortable = (evt: Sortable.SortableEvent, list: any[]) => {
+/**
+ * Core Sorting Logic for Vue Reactivity.
+ * Using Generics to handle both ParamItem[] and ParamValue[] safely.
+ */
+const syncSortable = <T extends ParamItem>(evt: Sortable.SortableEvent, list: T[]) => {
   const { oldIndex, newIndex, item, from, to } = evt;
+  
   if (from === to) {
     if (oldIndex !== undefined && newIndex !== undefined && oldIndex !== newIndex) {
-      const [movedItem] = list.splice(oldIndex, 1);
-      list.splice(newIndex, 0, movedItem);
+      const movedItem = list[oldIndex];
+      if (movedItem) {
+        list.splice(oldIndex, 1);
+        list.splice(newIndex, 0, movedItem);
+      }
     }
   } else if (evt.type === 'add') {
     const id = Number(item.getAttribute('data-id'));
     if (isNaN(id)) return;
+    
     const itemData = findAndRemoveItemData(id);
-    if (itemData) list.splice(newIndex!, 0, itemData);
+    if (itemData) {
+      // At this point, we know via onMove that we aren't nesting groups,
+      // so itemData is compatible with T.
+      (list as ParamItem[]).splice(newIndex!, 0, itemData);
+    }
   }
 };
 

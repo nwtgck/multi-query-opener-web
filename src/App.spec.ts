@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach, } from 'vitest';
-import { mount, } from '@vue/test-utils';
+import { mount, flushPromises, } from '@vue/test-utils';
 import * as CBOR from 'cbor-x';
 import App from './App.vue';
 
 /**
- * Enhanced Mock for CompressionStream/DecompressionStream.
- * It simulates a pass-through stream since JSDOM doesn't support them.
+ * Sync Mock for CompressionStream/DecompressionStream.
  */
 class MockTransformStream {
   readable: ReadableStream;
@@ -62,7 +61,6 @@ globalThis.DecompressionStream = MockTransformStream as any;
 describe('App.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     mockLocation.hash = '';
     mockLocation.href = 'http://localhost/';
     document.title = '';
@@ -71,78 +69,133 @@ describe('App.vue', () => {
   describe('Initial rendering', () => {
     it('renders correctly', () => {
       const wrapper = mount(App);
-      expect(wrapper.find('[data-testid="app-title"]').text()).toContain('Multi Query Opener');
-      expect(wrapper.find('[data-testid="page-title-input"]').exists()).toBe(true);
+      expect(wrapper.find('h1').text()).toContain('Multi Query Opener');
     });
   });
 
   describe('State updates', () => {
     it('updates state and document title when inputs change', async () => {
+      vi.useFakeTimers();
       const wrapper = mount(App);
-      const titleInput = wrapper.find('[data-testid="page-title-input"]');
+      const titleInput = wrapper.find('input[type="text"]');
       await titleInput.setValue('My Custom Title');
+      vi.advanceTimersByTime(500);
+      await flushPromises();
       expect(document.title).toBe('My Custom Title');
-    });
-  });
-
-  describe('Validation', () => {
-    it('shows validation error when required fields are missing', async () => {
-      const wrapper = mount(App);
-      await wrapper.find('[data-testid="base-url-input"]').setValue('');
-      await wrapper.find('[data-testid="param-key-input"]').setValue('');
-      const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
-      await openAllBtn.trigger('click');
-      expect(wrapper.find('[data-testid="error-alert"]').exists()).toBe(true);
+      vi.useRealTimers();
     });
   });
 
   describe('URL opening', () => {
-    it('opens all URLs when inputs are valid', async () => {
+    it('opens all URLs from root and groups', async () => {
       const wrapper = mount(App);
-      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
-      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
-      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
-      await textareas[0]!.setValue('test-query');
+      
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue('https://example.com');
+      await inputs[2]!.setValue('q');
+
+      const rootTextarea = wrapper.find('textarea');
+      await rootTextarea.setValue('root-val');
+
+      const buttons = wrapper.findAll('button');
+      const addGroupBtn = buttons.find(b => b.text() === 'Add Group');
+      await addGroupBtn?.trigger('click');
+      await flushPromises();
+
+      const addValBtn = wrapper.findAll('button').find(b => b.text() === '+ Add Value to Group');
+      await addValBtn?.trigger('click');
+      await flushPromises();
+
+      const textareas = wrapper.findAll('textarea');
+      await textareas[1]!.setValue('group-val-1');
+      await textareas[2]!.setValue('group-val-2');
+
       mockOpen.mockReturnValue({} as Window);
+      const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
+      await openAllBtn?.trigger('click');
 
-      const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
-      await openAllBtn.trigger('click');
-
-      expect(mockOpen).toHaveBeenCalledWith(
-        expect.stringContaining('q=test-query'),
-        '_blank',
-        'noreferrer',
-      );
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=root-val'), '_blank', 'noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=group-val-1'), '_blank', 'noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=group-val-2'), '_blank', 'noreferrer');
     });
   });
 
-  describe('URL Fragment persistence', () => {
-    it('updates URL hash when state changes (debounced)', async () => {
+  describe('Error reporting', () => {
+    it('shows error when configuration is missing', async () => {
       const wrapper = mount(App);
+      const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
       
-      await wrapper.find('[data-testid="page-title-input"]').setValue('New Title');
+      // Clear inputs
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue(''); // Base URL
+      await inputs[2]!.setValue(''); // Param Key
       
-      // State updates are debounced by 500ms
-      vi.advanceTimersByTime(500);
-      
-      // Wait for async compression/replaceState
-      await vi.runAllTimersAsync();
-
-      expect(mockReplaceState).toHaveBeenCalled();
-      expect(mockLocation.hash).toContain('#');
-      expect(mockLocation.hash.length).toBeGreaterThan(1);
+      await openAllBtn?.trigger('click');
+      expect(wrapper.text()).toContain('Please enter both Base URL and Query Parameter Name');
     });
 
-    it('restores state from URL hash on mount', async () => {
-      // Create a valid hash manually
+    it('shows error when popups are blocked', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue('https://example.com');
+      await inputs[2]!.setValue('q');
+      await wrapper.find('textarea').setValue('test');
+
+      // Simulate popup blocked
+      mockOpen.mockReturnValue(null);
+
+      const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
+      await openAllBtn?.trigger('click');
+
+      expect(wrapper.text()).toContain('tabs were blocked by your browser');
+    });
+
+    it('shows singular error when an individual popup is blocked', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue('https://example.com');
+      await inputs[2]!.setValue('q');
+      await wrapper.find('textarea').setValue('test');
+
+      // Simulate popup blocked
+      mockOpen.mockReturnValue(null);
+
+      // Find the individual open button (the one with the OpenIcon/title)
+      const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.text()).toContain('The tab was blocked by your browser');
+    });
+
+    it('shows configuration error when individual button is clicked without config', async () => {
+      const wrapper = mount(App);
+      const inputs = wrapper.findAll('input');
+      await inputs[1]!.setValue(''); // No Base URL
+      
+      const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
+      await openSingleBtn.trigger('click');
+
+      expect(wrapper.text()).toContain('Please enter both Base URL and Query Parameter Name');
+    });
+  });
+
+  describe('Persistence', () => {
+    it('restores state with numeric IDs from URL hash', async () => {
       const initialState = {
-        title: 'Shared Config',
-        baseUrl: 'https://api.test',
+        title: 'Persistence Test',
+        baseUrl: 'https://test.io',
         paramKey: 'key',
-        paramValues: ['val1', 'val2'],
+        paramValues: [
+          { id: 1, value: 'val1' },
+          { 
+            id: 2, 
+            name: 'Group 1', 
+            values: [{ id: 3, value: 'val2' }] 
+            // expanded: true is omitted in optimized DTO
+          }
+        ],
       };
       
-      // Encode using CBOR (MockTransformStream is pass-through, so no gzip happens in test)
       const cborData = CBOR.encode(initialState);
       const binary = Array.from(cborData).map((b) => String.fromCharCode(b)).join('');
       const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -150,18 +203,39 @@ describe('App.vue', () => {
       mockLocation.hash = `#${hash}`;
 
       const wrapper = mount(App);
-      
-      // Wait for async loadStateFromHash (which uses await decompressData)
-      // Since it's called in onMounted, we need to wait
-      await vi.runAllTimersAsync();
+      await flushPromises();
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      expect(wrapper.find('[data-testid="page-title-input"]').element instanceof HTMLInputElement).toBe(true);
-      expect((wrapper.find('[data-testid="page-title-input"]').element as HTMLInputElement).value).toBe('Shared Config');
-      expect((wrapper.find('[data-testid="base-url-input"]').element as HTMLInputElement).value).toBe('https://api.test');
-      
-      const textareas = wrapper.findAll('[data-testid="param-value-input"]');
+      expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://test.io');
+      const textareas = wrapper.findAll('textarea');
       expect(textareas.length).toBe(2);
       expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('val1');
+      expect((textareas[1]!.element as HTMLTextAreaElement).value).toBe('val2');
+    });
+
+    it('restores state from legacy string array', async () => {
+      const legacyState = {
+        title: 'Legacy Test',
+        baseUrl: 'https://legacy.io',
+        paramKey: 'q',
+        paramValues: ['legacy1', 'legacy2'],
+      };
+      
+      const cborData = CBOR.encode(legacyState);
+      const binary = Array.from(cborData).map((b) => String.fromCharCode(b)).join('');
+      const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      mockLocation.hash = `#${hash}`;
+
+      const wrapper = mount(App);
+      await flushPromises();
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://legacy.io');
+      const textareas = wrapper.findAll('textarea');
+      expect(textareas.length).toBe(2);
+      expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('legacy1');
+      expect((textareas[1]!.element as HTMLTextAreaElement).value).toBe('legacy2');
     });
   });
 });

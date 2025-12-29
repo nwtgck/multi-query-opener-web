@@ -1,16 +1,46 @@
 import { z, } from 'zod';
 
 /**
- * Schema for the application state used in storage and runtime.
+ * Optimized DTO for a single parameter value.
  */
-export const AppStateSchema = z.object({
-  title: z.string(),
-  baseUrl: z.string(),
-  paramKey: z.string(),
-  paramValues: z.array(z.string()),
+export const ParamValueDtoSchema = z.object({
+  id: z.number(),
+  value: z.string(),
 });
 
 /**
- * For storage, we use the same structure now.
+ * Optimized DTO for a group of parameter values.
+ * Only 'false' is stored for 'expanded' to save space. 'true' is implied by omission.
  */
-export const StorageStateSchema = AppStateSchema;
+export const ParamGroupDtoSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  values: z.array(ParamValueDtoSchema),
+  expanded: z.union([z.literal(false), z.undefined()]),
+});
+
+/**
+ * Optimized DTO for any parameter item.
+ */
+export const ParamItemDtoSchema = z.union([
+  ParamValueDtoSchema,
+  ParamGroupDtoSchema,
+]);
+
+/**
+ * Optimized DTO for the entire application state.
+ */
+export const AppStateDtoSchema = z.object({
+  title: z.string(),
+  baseUrl: z.string(),
+  paramKey: z.string(),
+  paramValues: z.array(z.union([
+    ParamItemDtoSchema,
+    z.string(), // Support legacy strings during parse
+  ])),
+});
+
+/**
+ * Final storage schema.
+ */
+export const StorageStateDtoSchema = AppStateDtoSchema;

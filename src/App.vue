@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, computed, watch, nextTick, } from 'vue';
+import { reactive, ref, onMounted, computed, watch, } from 'vue';
 import * as CBOR from 'cbor-x';
 import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import Sortable from 'sortablejs';
@@ -74,7 +74,7 @@ const findAndRemoveItemData = (id: string): ParamItem | null => {
   // Try top level
   const topIdx = state.paramValues.findIndex(v => v.id === id);
   if (topIdx !== -1) {
-    return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0];
+    return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0] || null;
   }
   
   // Try groups
@@ -82,7 +82,7 @@ const findAndRemoveItemData = (id: string): ParamItem | null => {
     if ('type' in item && item.type === 'group') {
       const gIdx = item.values.findIndex(v => v.id === id);
       if (gIdx !== -1) {
-        return (item.values as ParamValue[]).splice(gIdx, 1)[0];
+        return (item.values as ParamValue[]).splice(gIdx, 1)[0] || null;
       }
     }
   }

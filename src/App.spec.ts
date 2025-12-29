@@ -3,6 +3,16 @@ import { mount, } from '@vue/test-utils';
 import * as CBOR from 'cbor-x';
 import App from './App.vue';
 
+// Mock lz-string
+vi.mock('lz-string', () => {
+  return {
+    default: {
+      compress: vi.fn((data) => data),
+      decompress: vi.fn((data) => data),
+    },
+  };
+});
+
 /**
  * Enhanced Mock for CompressionStream/DecompressionStream.
  * It simulates a pass-through stream since JSDOM doesn't support them.
@@ -20,7 +30,13 @@ class MockTransformStream {
     });
     this.writable = new WritableStream({
       write(chunk) {
-        controller.enqueue(chunk);
+        // Simulate decompression: if it looks like our mock legacy gzip (starts with 1f 8b),
+        // strip the first two bytes to get back to the CBOR data.
+        if (chunk instanceof Uint8Array && chunk.length >= 2 && chunk[0] === 0x1f && chunk[1] === 0x8b) {
+          controller.enqueue(chunk.slice(2));
+        } else {
+          controller.enqueue(chunk);
+        }
       },
       close() {
         controller.close();
@@ -134,7 +150,13 @@ describe('App.vue', () => {
     });
 
     it('restores state from URL hash on mount', async () => {
-      // Create a valid hash manually
+      // Create a valid hash manually following the new logic:
+      // 1. CBOR encode
+      // 2. Base64 encode (toBase64)
+      // 3. LZString compress (mocked as identity)
+      // 4. Convert string to Uint8Array (pair of bytes)
+      // 5. Base64 encode for URL (toBase64)
+      
       const initialState = {
         title: 'Shared Config',
         baseUrl: 'https://api.test',
@@ -142,26 +164,63 @@ describe('App.vue', () => {
         paramValues: ['val1', 'val2'],
       };
       
-      // Encode using CBOR (MockTransformStream is pass-through, so no gzip happens in test)
       const cborData = CBOR.encode(initialState);
-      const binary = Array.from(cborData).map((b) => String.fromCharCode(b)).join('');
-      const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const b64 = btoa(Array.from(cborData).map(b => String.fromCharCode(b)).join(''))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       
-      mockLocation.hash = `#${hash}`;
+      // In our mock, LZString.compress(b64) returns b64
+      const compressed = b64; 
+      
+      const uint8 = new Uint8Array(compressed.length * 2);
+      for (let i = 0; i < compressed.length; i++) {
+        const code = compressed.charCodeAt(i);
+        uint8[i * 2] = code & 0xff;
+        uint8[i * 2 + 1] = (code >> 8) & 0xff;
+      }
+
+      const finalHash = btoa(Array.from(uint8).map(b => String.fromCharCode(b)).join(''))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      mockLocation.hash = `#${finalHash}`;
 
       const wrapper = mount(App);
       
-      // Wait for async loadStateFromHash (which uses await decompressData)
-      // Since it's called in onMounted, we need to wait
       await vi.runAllTimersAsync();
 
-      expect(wrapper.find('[data-testid="page-title-input"]').element instanceof HTMLInputElement).toBe(true);
       expect((wrapper.find('[data-testid="page-title-input"]').element as HTMLInputElement).value).toBe('Shared Config');
       expect((wrapper.find('[data-testid="base-url-input"]').element as HTMLInputElement).value).toBe('https://api.test');
       
       const textareas = wrapper.findAll('[data-testid="param-value-input"]');
       expect(textareas.length).toBe(2);
       expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('val1');
+    });
+
+    it('restores state from Gzip magic number (backward compatibility)', async () => {
+      const initialState = {
+        title: 'Legacy Config',
+        baseUrl: 'https://legacy.test',
+        paramKey: 'k',
+        paramValues: ['v1'],
+      };
+      
+      const cborData = CBOR.encode(initialState);
+      // Gzip magic number 1f 8b
+      const gzipData = new Uint8Array(cborData.length + 2);
+      gzipData[0] = 0x1f;
+      gzipData[1] = 0x8b;
+      gzipData.set(cborData, 2);
+      
+      const binary = Array.from(gzipData).map((b) => String.fromCharCode(b)).join('');
+      const hash = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      mockLocation.hash = `#${hash}`;
+
+      const wrapper = mount(App);
+      
+      // Wait for async loadStateFromHash
+      await vi.runAllTimersAsync();
+
+      expect((wrapper.find('[data-testid="page-title-input"]').element as HTMLInputElement).value).toBe('Legacy Config');
     });
   });
 });

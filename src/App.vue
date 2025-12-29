@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed, watch, nextTick, } from 'vue';
 import * as CBOR from 'cbor-x';
-import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
+import { useClipboard, watchDebounced, useColorMode, useLocalStorage, } from '@vueuse/core';
 import Sortable from 'sortablejs';
 import { StorageStateDtoSchema, } from './schemas';
 import type { 
@@ -38,6 +38,10 @@ const state = reactive<AppState>({
 const errorMessage = ref<string | null>(null);
 const isDebugOpen = ref(false);
 const isReady = ref(false);
+const isDragEnabled = useLocalStorage('mqo-drag-enabled', true);
+
+// Store sortable instances to update their 'disabled' state
+const sortableInstances: Sortable[] = [];
 
 /**
  * Check if the state contains any meaningful data that warrants a URL hash.
@@ -325,29 +329,37 @@ const sortableOptions: Sortable.Options = {
   animation: 150,
   group: 'params',
   ghostClass: 'sortable-ghost',
+  disabled: !isDragEnabled.value,
 };
+
+// Update all instances when toggle changes
+watch(isDragEnabled, (enabled) => {
+  sortableInstances.forEach(s => s.option('disabled', !enabled));
+});
 
 const paramListRef = ref<HTMLElement | null>(null);
 onMounted(async () => {
   await loadStateFromHash();
   if (paramListRef.value) {
-    Sortable.create(paramListRef.value, {
+    const s = Sortable.create(paramListRef.value, {
       ...sortableOptions,
       onUpdate: (evt) => syncSortable(evt, state.paramValues),
       onAdd: (evt) => syncSortable(evt, state.paramValues),
     });
+    sortableInstances.push(s);
   }
   nextTick(() => { isReady.value = true; });
 });
 
 const vSortableGroup = {
-  mounted: (el: HTMLElement, binding: any) => {
-    Sortable.create(el, {
+  mounted: (el: HTMLElement, binding: { value: ParamValue[] }) => {
+    const s = Sortable.create(el, {
       ...sortableOptions,
       onMove: (evt) => !evt.dragged.hasAttribute('data-is-group'),
       onUpdate: (evt) => syncSortable(evt, binding.value),
       onAdd: (evt) => syncSortable(evt, binding.value),
     });
+    sortableInstances.push(s);
   },
 };
 
@@ -363,7 +375,14 @@ const urlLengthClass = computed(() => {
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 font-sans transition-colors duration-200">
     <div class="max-w-3xl mx-auto">
       <header class="mb-8 text-center relative">
-        <div class="absolute right-0 top-0">
+        <div class="absolute right-0 top-0 flex items-center gap-2">
+          <label class="flex items-center cursor-pointer gap-2 mr-2">
+            <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Drag Reorder</span>
+            <div class="relative">
+              <input type="checkbox" v-model="isDragEnabled" class="sr-only peer">
+              <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+            </div>
+          </label>
           <select v-model="colorMode" class="text-xs border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:text-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             <option value="auto">System</option>
             <option value="light">Light</option>
@@ -427,7 +446,12 @@ const urlLengthClass = computed(() => {
               class="group/item"
             >
               <div v-if="!('type' in item)" class="flex items-start gap-2">
-                <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
+                <div 
+                  v-show="isDragEnabled" 
+                  class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
+                >
+                  <DragHandleIcon />
+                </div>
                 <div class="flex-1 relative">
                   <textarea v-model="item.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..."></textarea>
                   <button @click="removeValue(item.id)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove"><RemoveIcon /></button>
@@ -437,7 +461,12 @@ const urlLengthClass = computed(() => {
 
               <div v-else class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50">
-                  <div class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
+                  <div 
+                    v-show="isDragEnabled" 
+                    class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
+                  >
+                    <DragHandleIcon />
+                  </div>
                   <button @click="item.expanded = !item.expanded" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><ChevronIcon :expanded="item.expanded" /></button>
                   <input 
                     v-model="item.name" 
@@ -449,7 +478,12 @@ const urlLengthClass = computed(() => {
                 </div>
                 <div v-if="item.expanded" v-sortable-group="item.values" class="p-3 space-y-4 min-h-[40px] bg-white dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
                   <div v-for="vItem in item.values" :key="vItem.id" :data-id="vItem.id" class="flex items-start gap-2">
-                    <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
+                    <div 
+                      v-show="isDragEnabled" 
+                      class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
+                    >
+                      <DragHandleIcon />
+                    </div>
                     <div class="flex-1 relative">
                       <textarea v-model="vItem.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..."></textarea>
                       <button @click="removeValueFromGroup(item.id, vItem.id)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove"><RemoveIcon /></button>

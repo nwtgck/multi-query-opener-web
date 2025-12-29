@@ -444,14 +444,6 @@ onMounted(() => {
         <section class="mb-8">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Query Parameter Values</h2>
-            <button
-              @click="addValue"
-              data-testid="add-input-btn"
-              type="button"
-              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Add Input
-            </button>
           </div>
           
           <div ref="paramListRef" class="space-y-4">
@@ -491,6 +483,17 @@ onMounted(() => {
                 <OpenIcon />
               </button>
             </div>
+          </div>
+
+          <div class="mt-4 flex justify-end">
+            <button
+              @click="addValue"
+              data-testid="add-input-btn"
+              type="button"
+              class="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+            >
+              Add Input
+            </button>
           </div>
         </section>
 

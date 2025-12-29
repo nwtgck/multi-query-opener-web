@@ -46,7 +46,7 @@ Object.defineProperty(window, "location", {
 });
 
 // Mock history.replaceState
-const mockReplaceState = vi.fn((_state, _title, url) => {
+const mockReplaceState = vi.fn((_state: unknown, _title: string, url: string) => {
   mockLocation.hash = url.startsWith("#") ? url : new URL(url, "http://localhost").hash;
   mockLocation.href = `http://localhost/${url}`;
 });

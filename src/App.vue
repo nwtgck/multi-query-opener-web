@@ -10,6 +10,7 @@ import type {
   ParamGroup, 
   AppState,
   StorageStateDto,
+  ParamItemDto,
 } from "./types";
 import DragHandleIcon from "./components/icons/DragHandleIcon.vue";
 import RemoveIcon from "./components/icons/RemoveIcon.vue";
@@ -46,36 +47,57 @@ const sortableInstances: Sortable[] = [];
 /**
  * Check if the state contains any meaningful data that warrants a URL hash.
  */
-const hasData = () => {
-  if (state.baseUrl.trim() !== "" || state.paramKey.trim() !== "") return true;
-  if (state.paramValues.length > 1) return true;
+const hasData = (): boolean => {
+  if (state.baseUrl.trim() !== "" || state.paramKey.trim() !== "") {
+    return true;
+  }
+  // If there's more than one item, or the first item isn't just an empty default value
+  if (state.paramValues.length > 1) {
+    return true;
+  }
   const first = state.paramValues[0];
-  if (!first) return false;
-  if ("type" in first) return true;
-  if (first.value.trim() !== "") return true;
+  if (first === undefined) {
+    return false;
+  }
+  if ("type" in first) {
+    return true; // It's a group
+  }
+  if (first.value.trim() !== "") {
+    return true;
+  }
   return false;
 };
 
 /**
  * Scan data to find the highest ID and update counter to avoid collision.
  */
-const syncIdCounter = (items: ParamItem[]) => {
+const syncIdCounter = (items: readonly ParamItem[]) => {
   for (const item of items) {
-    if (item.id > _idCounter) _idCounter = item.id;
+    if (item.id > _idCounter) {
+      _idCounter = item.id;
+    }
     if ("type" in item && item.type === "group") {
-      for (const v of item.values) { if (v.id > _idCounter) _idCounter = v.id; }
+      for (const v of item.values) {
+        if (v.id > _idCounter) {
+          _idCounter = v.id;
+        }
+      }
     }
   }
 };
 
 const findAndRemoveItemData = (id: number): ParamItem | null => {
   const topIdx = state.paramValues.findIndex(v => v.id === id);
-  if (topIdx !== -1) return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0] || null;
+  if (topIdx !== -1) {
+    return state.paramValues.splice(topIdx, 1)[0] ?? null;
+  }
   
   for (const item of state.paramValues) {
     if ("type" in item && item.type === "group") {
       const gIdx = item.values.findIndex(v => v.id === id);
-      if (gIdx !== -1) return (item.values as ParamValue[]).splice(gIdx, 1)[0] || null;
+      if (gIdx !== -1) {
+        return item.values.splice(gIdx, 1)[0] ?? null;
+      }
     }
   }
   return null;
@@ -83,10 +105,8 @@ const findAndRemoveItemData = (id: number): ParamItem | null => {
 
 /**
  * Convert Runtime State to DTO for storage.
- * - Removes 'type' from groups.
- * - expanded: true is omitted (undefined), expanded: false is kept.
  */
-const toDto = () => {
+const toDto = (): StorageStateDto => {
   return {
     title: state.title,
     baseUrl: state.baseUrl,
@@ -96,12 +116,12 @@ const toDto = () => {
         return {
           id: item.id,
           name: item.name,
-          values: item.values,
-          // Only store if false, otherwise leave undefined to save space
-          expanded: item.expanded ? undefined : (false as const),
+          values: item.values.map(v => ({ id: v.id, value: v.value })),
+          expanded: item.expanded ? undefined : false,
         };
       }
-      return item;
+      const val = item as ParamValue;
+      return { id: val.id, value: val.value };
     }),
   };
 };
@@ -123,14 +143,15 @@ const saveStateToHash = async () => {
  * Convert DTO to Runtime State.
  */
 const fromDto = (data: StorageStateDto): AppState => {
-  const paramValues = data.paramValues.map((item): ParamItem => {
-    // Check if it's a group (it has 'values' array but no 'type' anymore)
+  const paramValues = data.paramValues.map((item: ParamItemDto | string): ParamItem => {
+    if (typeof item === "string") {
+      return { id: nextId(), value: item };
+    }
     if ("values" in item) {
       return {
         id: item.id,
         type: "group",
         name: item.name,
-        // expanded: undefined -> true, expanded: false -> false
         expanded: item.expanded !== false,
         values: item.values.map((v): ParamValue => ({ 
           id: v.id, 
@@ -138,8 +159,6 @@ const fromDto = (data: StorageStateDto): AppState => {
         })),
       };
     }
-    
-    // It's a single value
     return { id: item.id, value: item.value };
   });
 
@@ -154,7 +173,7 @@ const fromDto = (data: StorageStateDto): AppState => {
 const loadStateFromHash = async () => {
   updateUrlLength();
   const hash = window.location.hash.slice(1);
-  if (!hash) {
+  if (hash === "") {
     state.paramValues = [{ id: nextId(), value: "" }];
     return;
   }
@@ -175,7 +194,8 @@ const loadStateFromHash = async () => {
     }
   } catch (e) {
     console.error("Failed to load state:", e);
-    errorMessage.value = "Failed to load settings from URL.";
+    errorMessage.value = "Failed to load settings (breaking change applied).";
+    state.paramValues = [{ id: nextId(), value: "" }];
   } finally {
     updateUrlLength();
   }
@@ -185,9 +205,13 @@ watch(() => state.title, (t) => { document.title = t; }, { immediate: true });
 watchDebounced(
   state, 
   () => { 
-    if (!isReady.value) return;
+    if (!isReady.value) {
+      return;
+    }
     if (!hasData()) {
-      if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (window.location.hash !== "") {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
       return;
     }
     saveStateToHash(); 
@@ -210,28 +234,34 @@ const removeValue = (id: number) => {
   const idx = state.paramValues.findIndex(v => v.id === id);
   if (idx !== -1) {
     state.paramValues.splice(idx, 1);
-    if (state.paramValues.length === 0) addValue();
+    if (state.paramValues.length === 0) {
+      addValue();
+    }
   }
 };
 
 const addValueToGroup = (groupId: number) => {
   const g = state.paramValues.find(v => v.id === groupId) as ParamGroup | undefined;
-  if (g) g.values.push({ id: nextId(), value: "" });
+  if (g !== undefined) {
+    g.values.push({ id: nextId(), value: "" });
+  }
 };
 
 const removeValueFromGroup = (groupId: number, valueId: number) => {
   const g = state.paramValues.find(v => v.id === groupId) as ParamGroup | undefined;
-  if (g) {
+  if (g !== undefined) {
     const vIdx = g.values.findIndex(v => v.id === valueId);
     if (vIdx !== -1) {
       g.values.splice(vIdx, 1);
-      if (g.values.length === 0) g.values.push({ id: nextId(), value: "" });
+      if (g.values.length === 0) {
+        g.values.push({ id: nextId(), value: "" });
+      }
     }
   }
 };
 
 const validateConfig = (): boolean => {
-  if (!state.baseUrl.trim() || !state.paramKey.trim()) {
+  if (state.baseUrl.trim() === "" || state.paramKey.trim() === "") {
     errorMessage.value = "Please enter both Base URL and Query Parameter Name.";
     return false;
   }
@@ -239,10 +269,16 @@ const validateConfig = (): boolean => {
 };
 
 const openSingleUrl = (val: string, suppressError = false): boolean => {
-  if (!suppressError) errorMessage.value = null;
-  if (!validateConfig()) return false;
-  if (!val.trim()) {
-    if (!suppressError) errorMessage.value = "Please enter a value for the query parameter.";
+  if (!suppressError) {
+    errorMessage.value = null;
+  }
+  if (!validateConfig()) {
+    return false;
+  }
+  if (val.trim() === "") {
+    if (!suppressError) {
+      errorMessage.value = "Please enter a value for the query parameter.";
+    }
     return false;
   }
 
@@ -251,26 +287,39 @@ const openSingleUrl = (val: string, suppressError = false): boolean => {
     url.searchParams.append(state.paramKey, val.trim());
     const win = window.open(url.toString(), "_blank", "noreferrer");
     if (win === null) {
-      if (!suppressError) errorMessage.value = "The tab was blocked by your browser. Please allow pop-ups for this site.";
+      if (!suppressError) {
+        errorMessage.value = "The tab was blocked by your browser. Please allow pop-ups for this site.";
+      }
       return false;
     }
     return true;
   } catch {
-    if (!suppressError) errorMessage.value = "Invalid Base URL configuration.";
+    if (!suppressError) {
+      errorMessage.value = "Invalid Base URL configuration.";
+    }
     return false;
   }
 };
 
 const openAll = () => {
   errorMessage.value = null;
-  if (!validateConfig()) return;
+  if (!validateConfig()) {
+    return;
+  }
 
   const activeValues: string[] = [];
   for (const item of state.paramValues) {
     if ("type" in item && item.type === "group") {
-      for (const v of item.values) { if (v.value.trim()) activeValues.push(v.value); }
+      for (const v of item.values) {
+        if (v.value.trim() !== "") {
+          activeValues.push(v.value);
+        }
+      }
     } else {
-      if ((item as ParamValue).value.trim()) activeValues.push((item as ParamValue).value);
+      const val = item as ParamValue;
+      if (val.value.trim() !== "") {
+        activeValues.push(val.value);
+      }
     }
   }
 
@@ -282,7 +331,9 @@ const openAll = () => {
   let blockedCount = 0;
   for (const val of activeValues) {
     const success = openSingleUrl(val, true);
-    if (!success) blockedCount++;
+    if (!success) {
+      blockedCount++;
+    }
   }
 
   if (blockedCount > 0) {
@@ -294,29 +345,27 @@ const { copy, copied } = useClipboard();
 const copyShareLink = () => copy(window.location.href);
 const colorMode = useColorMode({ initialValue: "auto" });
 
-/**
- * Core Sorting Logic for Vue Reactivity.
- * Using Generics to handle both ParamItem[] and ParamValue[] safely.
- */
 const syncSortable = <T extends ParamItem>(evt: Sortable.SortableEvent, list: T[]) => {
   const { oldIndex, newIndex, item, from, to } = evt;
-  
   if (from === to) {
     if (oldIndex !== undefined && newIndex !== undefined && oldIndex !== newIndex) {
       const movedItem = list[oldIndex];
-      if (movedItem) {
+      if (movedItem !== undefined) {
         list.splice(oldIndex, 1);
         list.splice(newIndex, 0, movedItem);
       }
     }
   } else if (evt.type === "add") {
-    const id = Number(item.getAttribute("data-id"));
-    if (isNaN(id)) return;
-    
+    const idAttr = item.getAttribute("data-id");
+    if (idAttr === null) {
+      return;
+    }
+    const id = Number(idAttr);
+    if (isNaN(id)) {
+      return;
+    }
     const itemData = findAndRemoveItemData(id);
-    if (itemData) {
-      // At this point, we know via onMove that we aren't nesting groups,
-      // so itemData is compatible with T.
+    if (itemData !== null) {
       (list as ParamItem[]).splice(newIndex!, 0, itemData);
     }
   }
@@ -328,22 +377,21 @@ const sortableOptions: Sortable.Options = {
   group: "params",
   ghostClass: "sortable-ghost",
   disabled: !isDragEnabled.value,
-  // 300ms delay for touch devices to prevent accidental drags during scrolling
   delay: 300,
   delayOnTouchOnly: true,
-  // Provide a threshold to allow some movement before drag cancels (helps with shaky fingers)
   touchStartThreshold: 5,
 };
 
-// Update all instances when toggle changes
 watch(isDragEnabled, (enabled) => {
-  for (const s of sortableInstances) s.option("disabled", !enabled);
+  for (const s of sortableInstances) {
+    s.option("disabled", !enabled);
+  }
 });
 
 const paramListRef = ref<HTMLElement | null>(null);
 onMounted(async () => {
   await loadStateFromHash();
-  if (paramListRef.value) {
+  if (paramListRef.value !== null) {
     const s = Sortable.create(paramListRef.value, {
       ...sortableOptions,
       onUpdate: (evt) => syncSortable(evt, state.paramValues),
@@ -393,34 +441,18 @@ const urlLengthClass = computed(() => {
           </select>
         </div>
         <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-          <a href="./" class="hover:opacity-80 transition-opacity">
-            {{ state.title || 'Multi Query Opener' }}
-          </a>
+          <a href="./" class="hover:opacity-80 transition-opacity">{{ state.title || 'Multi Query Opener' }}</a>
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Organize query values into groups and drag to reorder.</p>
       </header>
 
       <!-- Error Message Section -->
-      <div
-        v-if="errorMessage"
-        class="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded shadow-sm flex items-start justify-between"
-      >
+      <div v-if="errorMessage !== null" class="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded shadow-sm flex items-start justify-between">
         <div class="flex">
-          <div class="flex-shrink-0">
-            <ErrorIcon class="text-red-400 w-5 h-5" />
-          </div>
-          <div class="ml-3">
-            <p class="text-sm text-red-700 dark:text-red-400 font-medium">
-              {{ errorMessage }}
-            </p>
-          </div>
+          <div class="flex-shrink-0"><ErrorIcon class="text-red-400 w-5 h-5" /></div>
+          <div class="ml-3"><p class="text-sm text-red-700 dark:text-red-400 font-medium">{{ errorMessage }}</p></div>
         </div>
-        <button
-          class="ml-auto pl-3 text-red-500 hover:text-red-600 focus:outline-none"
-          @click="errorMessage = null"
-        >
-          <CloseIcon class="w-5 h-5" />
-        </button>
+        <button class="ml-auto pl-3 text-red-500 hover:text-red-600 focus:outline-none" @click="errorMessage = null"><CloseIcon class="w-5 h-5" /></button>
       </div>
 
       <main class="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
@@ -441,20 +473,10 @@ const urlLengthClass = computed(() => {
 
         <section class="mb-8">
           <div ref="paramListRef" class="space-y-4 min-h-[50px]">
-            <div
-              v-for="item in state.paramValues"
-              :key="item.id"
-              :data-id="item.id"
-              :data-is-group="('type' in item && item.type === 'group') ? 'true' : undefined"
-              class="group/item"
-            >
+            <div v-for="item in state.paramValues" :key="item.id" :data-id="item.id" :data-is-group="('type' in item && item.type === 'group') ? 'true' : undefined" class="group/item">
+              <!-- Value Item -->
               <div v-if="!('type' in item)" class="flex items-start gap-2">
-                <div 
-                  v-show="isDragEnabled" 
-                  class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
-                >
-                  <DragHandleIcon />
-                </div>
+                <div v-show="isDragEnabled" class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
                 <div class="flex-1 relative">
                   <textarea v-model="item.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..." />
                   <button class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove" @click="removeValue(item.id)"><RemoveIcon /></button>
@@ -462,31 +484,17 @@ const urlLengthClass = computed(() => {
                 <button class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab" @click="openSingleUrl(item.value)"><OpenIcon /></button>
               </div>
 
+              <!-- Group Item -->
               <div v-else class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50">
-                  <div 
-                    v-show="isDragEnabled" 
-                    class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
-                  >
-                    <DragHandleIcon />
-                  </div>
+                  <div v-show="isDragEnabled" class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
                   <button class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="item.expanded = !item.expanded"><ChevronIcon :expanded="item.expanded" /></button>
-                  <input 
-                    v-model="item.name" 
-                    class="flex-1 bg-transparent border-none text-sm font-semibold text-gray-700 dark:text-gray-200 p-0 focus:ring-0" 
-                    placeholder="Group Name" 
-                    @focus="($event.target as HTMLInputElement).select()"
-                  >
+                  <input v-model="item.name" class="flex-1 bg-transparent border-none text-sm font-semibold text-gray-700 dark:text-gray-200 p-0 focus:ring-0" placeholder="Group Name" @focus="($event.target as HTMLInputElement).select()">
                   <button class="text-gray-400 hover:text-red-500" title="Remove Group" @click="removeValue(item.id)"><RemoveIcon /></button>
                 </div>
                 <div v-if="item.expanded" v-sortable-group="item.values" class="p-3 space-y-4 min-h-[40px] bg-white dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
                   <div v-for="vItem in item.values" :key="vItem.id" :data-id="vItem.id" class="flex items-start gap-2">
-                    <div 
-                      v-show="isDragEnabled" 
-                      class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"
-                    >
-                      <DragHandleIcon />
-                    </div>
+                    <div v-show="isDragEnabled" class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
                     <div class="flex-1 relative">
                       <textarea v-model="vItem.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..." />
                       <button class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove" @click="removeValueFromGroup(item.id, vItem.id)"><RemoveIcon /></button>
@@ -518,18 +526,13 @@ const urlLengthClass = computed(() => {
         </div>
 
         <div class="mt-4 flex justify-end">
-          <div :class="urlLengthClass" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border" title="Current URL character length">
-            URL Length: {{ currentUrlLength }} characters
-          </div>
+          <div :class="urlLengthClass" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border" title="Current URL character length">URL Length: {{ currentUrlLength }} characters</div>
         </div>
       </main>
 
       <footer class="mt-8 text-center text-xs text-gray-500">
         <p>All data is stored in the URL fragment after being encoded with CBOR and compressed with Gzip.</p>
-        <details 
-          class="mt-4 text-left opacity-30 hover:opacity-100 transition-opacity duration-300"
-          @toggle="isDebugOpen = ($event.target as HTMLDetailsElement).open"
-        >
+        <details class="mt-4 text-left opacity-30 hover:opacity-100 transition-opacity duration-300" @toggle="isDebugOpen = ($event.target as HTMLDetailsElement).open">
           <summary class="cursor-pointer text-center list-none hover:text-indigo-500 transition-colors focus:outline-none">Debug State (JSON)</summary>
           <div v-if="isDebugOpen" class="mt-2 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-inner overflow-auto max-h-60">
             <pre class="text-[10px] font-mono whitespace-pre-wrap text-gray-600 dark:text-gray-400">{{ JSON.stringify(toDto(), null, 2) }}</pre>

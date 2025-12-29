@@ -25,6 +25,7 @@ export default tseslint.config(
       },
       parserOptions: {
         parser: tseslint.parser,
+        projectService: true,
         extraFileExtensions: [".vue"],
       },
     },
@@ -68,6 +69,17 @@ export default tseslint.config(
       "vue/multi-word-component-names": "off",
       "@typescript-eslint/no-explicit-any": "error",
 
+      // Enforce strict boolean expressions
+      "@typescript-eslint/strict-boolean-expressions": [
+        "error",
+        {
+          allowString: false,
+          allowNumber: false,
+          allowNullableObject: false,
+          allowNullableBoolean: true,
+        },
+      ],
+
       // Allow coder to decide attribute line breaks
       "vue/max-attributes-per-line": "off",
       "vue/first-attribute-linebreak": "off",
@@ -75,6 +87,24 @@ export default tseslint.config(
       "vue/html-indent": ["error", 2],
       "vue/singleline-html-element-content-newline": "off",
       "vue/multiline-html-element-content-newline": "off",
+      
+      // Auto-fix attribute order
+      "vue/attributes-order": ["warn", {
+        order: [
+          "DEFINITION",
+          "LIST_RENDERING",
+          "CONDITIONALS",
+          "RENDER_MODIFIERS",
+          "GLOBAL",
+          ["UNIQUE", "SLOT"],
+          "TWO_WAY_BINDING",
+          "OTHER_DIRECTIVES",
+          "OTHER_ATTR",
+          "EVENTS",
+          "CONTENT"
+        ],
+        alphabetical: false
+      }],
     },
   },
 );

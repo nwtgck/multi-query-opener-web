@@ -1,18 +1,18 @@
 import { z, } from 'zod';
 
 /**
- * DTO for a single parameter value.
+ * Optimized DTO for a single parameter value.
  */
 export const ParamValueDtoSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   value: z.string(),
 });
 
 /**
- * DTO for a group of parameter values.
+ * Optimized DTO for a group of parameter values.
  */
 export const ParamGroupDtoSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   type: z.literal('group'),
   name: z.string(),
   values: z.array(ParamValueDtoSchema),
@@ -20,7 +20,7 @@ export const ParamGroupDtoSchema = z.object({
 });
 
 /**
- * DTO for any parameter item.
+ * Optimized DTO for any parameter item.
  */
 export const ParamItemDtoSchema = z.union([
   ParamValueDtoSchema,
@@ -28,7 +28,7 @@ export const ParamItemDtoSchema = z.union([
 ]);
 
 /**
- * DTO for the entire application state.
+ * Optimized DTO for the entire application state.
  */
 export const AppStateDtoSchema = z.object({
   title: z.string(),
@@ -38,24 +38,6 @@ export const AppStateDtoSchema = z.object({
 });
 
 /**
- * Legacy schema for backward compatibility.
+ * Final storage schema (Breaking change: legacy support removed for extreme optimization).
  */
-export const LegacyStateSchema = z.object({
-  title: z.string().optional(),
-  baseUrl: z.string().optional(),
-  paramKey: z.string().optional(),
-  paramValues: z.array(z.union([
-    z.string(),
-    z.object({
-      type: z.literal('group'),
-      name: z.string(),
-      values: z.array(z.string()),
-      expanded: z.boolean().optional(),
-    }),
-  ])).optional(),
-});
-
-/**
- * Combined storage schema.
- */
-export const StorageStateDtoSchema = z.union([AppStateDtoSchema, LegacyStateSchema]);
+export const StorageStateDtoSchema = AppStateDtoSchema;

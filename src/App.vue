@@ -21,7 +21,9 @@ import {
   fromBase64,
 } from './utils';
 
-const createId = () => Math.random().toString(36).slice(2, 11);
+// Global counter for sequential IDs
+let _idCounter = 0;
+const nextId = () => ++_idCounter;
 
 const state = reactive<AppState>({
   title: 'Multi Query Opener',
@@ -33,58 +35,26 @@ const state = reactive<AppState>({
 const errorMessage = ref<string | null>(null);
 const isDebugOpen = ref(false);
 
-const normalizeData = (decoded: any): AppState => {
-  const paramValues = (decoded.paramValues || []).map((item: any): ParamItem => {
-    if (typeof item === 'string') return { id: createId(), value: item };
-    if (item.id) {
-      if (item.type === 'group') {
-        return {
-          id: item.id,
-          type: 'group',
-          name: item.name,
-          expanded: item.expanded ?? true,
-          values: item.values.map((v: any) => 
-            typeof v === 'string' ? { id: createId(), value: v } : { id: v.id || createId(), value: v.value ?? '' }
-          ),
-        };
-      }
-      return { id: item.id, value: item.value ?? '' };
+/**
+ * Scan data to find the highest ID and update counter to avoid collision.
+ */
+const syncIdCounter = (items: ParamItem[]) => {
+  items.forEach(item => {
+    if (item.id > _idCounter) _idCounter = item.id;
+    if ('type' in item && item.type === 'group') {
+      item.values.forEach(v => { if (v.id > _idCounter) _idCounter = v.id; });
     }
-    return {
-      id: createId(),
-      type: 'group',
-      name: item.name || 'Group',
-      expanded: item.expanded ?? true,
-      values: (item.values || []).map((v: any) => ({ id: createId(), value: v })),
-    };
   });
-
-  return {
-    title: decoded.title || 'Multi Query Opener',
-    baseUrl: decoded.baseUrl || '',
-    paramKey: decoded.paramKey || '',
-    paramValues: paramValues.length > 0 ? paramValues : [{ id: createId(), value: '' }],
-  };
 };
 
-/**
- * Global search and removal of an item by ID.
- * Crucial for cross-list movement.
- */
-const findAndRemoveItemData = (id: string): ParamItem | null => {
-  // Try top level
+const findAndRemoveItemData = (id: number): ParamItem | null => {
   const topIdx = state.paramValues.findIndex(v => v.id === id);
-  if (topIdx !== -1) {
-    return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0] || null;
-  }
+  if (topIdx !== -1) return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0] || null;
   
-  // Try groups
   for (const item of state.paramValues) {
     if ('type' in item && item.type === 'group') {
       const gIdx = item.values.findIndex(v => v.id === id);
-      if (gIdx !== -1) {
-        return (item.values as ParamValue[]).splice(gIdx, 1)[0] || null;
-      }
+      if (gIdx !== -1) return (item.values as ParamValue[]).splice(gIdx, 1)[0] || null;
     }
   }
   return null;
@@ -106,7 +76,7 @@ const loadStateFromHash = async () => {
   updateUrlLength();
   const hash = window.location.hash.slice(1);
   if (!hash) {
-    state.paramValues = [{ id: createId(), value: '' }];
+    state.paramValues = [{ id: nextId(), value: '' }];
     return;
   }
 
@@ -117,15 +87,19 @@ const loadStateFromHash = async () => {
     const parseResult = StorageStateDtoSchema.safeParse(rawDecoded);
     
     if (parseResult.success) {
-      const normalized = normalizeData(parseResult.data);
-      state.title = normalized.title;
-      state.baseUrl = normalized.baseUrl;
-      state.paramKey = normalized.paramKey;
-      state.paramValues.splice(0, state.paramValues.length, ...normalized.paramValues);
+      const data = parseResult.data;
+      // Sync ID counter with loaded data
+      syncIdCounter(data.paramValues as ParamItem[]);
+      
+      state.title = data.title;
+      state.baseUrl = data.baseUrl;
+      state.paramKey = data.paramKey;
+      state.paramValues.splice(0, state.paramValues.length, ...data.paramValues);
     }
   } catch (e) {
     console.error('Failed to load state:', e);
-    errorMessage.value = 'Failed to load settings from URL.';
+    errorMessage.value = 'Failed to load settings (breaking change applied).';
+    state.paramValues = [{ id: nextId(), value: '' }];
   } finally {
     updateUrlLength();
   }
@@ -134,18 +108,18 @@ const loadStateFromHash = async () => {
 watch(() => state.title, (t) => { document.title = t; }, { immediate: true });
 watchDebounced(state, () => { saveStateToHash(); }, { debounce: 500, deep: true });
 
-const addValue = () => { state.paramValues.push({ id: createId(), value: '' }); };
+const addValue = () => { state.paramValues.push({ id: nextId(), value: '' }); };
 const addGroup = () => {
   state.paramValues.push({
-    id: createId(),
+    id: nextId(),
     type: 'group',
     name: 'New Group',
-    values: [{ id: createId(), value: '' }],
+    values: [{ id: nextId(), value: '' }],
     expanded: true,
   });
 };
 
-const removeValue = (id: string) => {
+const removeValue = (id: number) => {
   const idx = state.paramValues.findIndex(v => v.id === id);
   if (idx !== -1) {
     state.paramValues.splice(idx, 1);
@@ -153,18 +127,18 @@ const removeValue = (id: string) => {
   }
 };
 
-const addValueToGroup = (groupId: string) => {
+const addValueToGroup = (groupId: number) => {
   const g = state.paramValues.find(v => v.id === groupId) as ParamGroup | undefined;
-  if (g && g.type === 'group') g.values.push({ id: createId(), value: '' });
+  if (g) g.values.push({ id: nextId(), value: '' });
 };
 
-const removeValueFromGroup = (groupId: string, valueId: string) => {
+const removeValueFromGroup = (groupId: number, valueId: number) => {
   const g = state.paramValues.find(v => v.id === groupId) as ParamGroup | undefined;
-  if (g && g.type === 'group') {
+  if (g) {
     const vIdx = g.values.findIndex(v => v.id === valueId);
     if (vIdx !== -1) {
       g.values.splice(vIdx, 1);
-      if (g.values.length === 0) g.values.push({ id: createId(), value: '' });
+      if (g.values.length === 0) g.values.push({ id: nextId(), value: '' });
     }
   }
 };
@@ -196,30 +170,18 @@ const { copy, copied } = useClipboard();
 const copyShareLink = () => copy(window.location.href);
 const colorMode = useColorMode({ initialValue: 'auto' });
 
-/**
- * Core Sorting Logic for Vue Reactivity
- */
 const syncSortable = (evt: Sortable.SortableEvent, list: any[]) => {
   const { oldIndex, newIndex, item, from, to } = evt;
-  
   if (from === to) {
-    // Reorder within the same list
     if (oldIndex !== undefined && newIndex !== undefined && oldIndex !== newIndex) {
       const [movedItem] = list.splice(oldIndex, 1);
       list.splice(newIndex, 0, movedItem);
     }
-  } else {
-    // Cross-list move (Add case)
-    // We only handle it in the 'onAdd' of the target list
-    if (evt.type === 'add') {
-      const id = item.getAttribute('data-id');
-      if (!id) return;
-      
-      const itemData = findAndRemoveItemData(id);
-      if (itemData) {
-        list.splice(newIndex!, 0, itemData);
-      }
-    }
+  } else if (evt.type === 'add') {
+    const id = Number(item.getAttribute('data-id'));
+    if (isNaN(id)) return;
+    const itemData = findAndRemoveItemData(id);
+    if (itemData) list.splice(newIndex!, 0, itemData);
   }
 };
 
@@ -312,7 +274,6 @@ const urlLengthClass = computed(() => {
               :data-is-group="('type' in item && item.type === 'group') ? 'true' : undefined"
               class="group/item"
             >
-              <!-- Value Item -->
               <div v-if="!('type' in item)" class="flex items-start gap-2">
                 <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
                 <div class="flex-1 relative">
@@ -322,7 +283,6 @@ const urlLengthClass = computed(() => {
                 <button @click="openSingleUrl(item.value)" class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab"><OpenIcon /></button>
               </div>
 
-              <!-- Group Item -->
               <div v-else class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-800/50">
                 <div class="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50">
                   <div class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>

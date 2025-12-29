@@ -4,7 +4,7 @@ import * as CBOR from 'cbor-x';
 import App from './App.vue';
 
 /**
- * Sync Mock for CompressionStream/DecompressionStream to stabilize tests.
+ * Sync Mock for CompressionStream/DecompressionStream.
  */
 class MockTransformStream {
   readable: ReadableStream;
@@ -79,11 +79,8 @@ describe('App.vue', () => {
       const wrapper = mount(App);
       const titleInput = wrapper.find('input[type="text"]');
       await titleInput.setValue('My Custom Title');
-      
-      // Wait for debounce (500ms)
       vi.advanceTimersByTime(500);
       await flushPromises();
-      
       expect(document.title).toBe('My Custom Title');
       vi.useRealTimers();
     });
@@ -93,16 +90,13 @@ describe('App.vue', () => {
     it('opens all URLs from root and groups', async () => {
       const wrapper = mount(App);
       
-      // Fill base config
       const inputs = wrapper.findAll('input');
       await inputs[1]!.setValue('https://example.com');
       await inputs[2]!.setValue('q');
 
-      // Set root value
       const rootTextarea = wrapper.find('textarea');
       await rootTextarea.setValue('root-val');
 
-      // Add group and values
       const buttons = wrapper.findAll('button');
       const addGroupBtn = buttons.find(b => b.text() === 'Add Group');
       await addGroupBtn?.trigger('click');
@@ -127,19 +121,19 @@ describe('App.vue', () => {
   });
 
   describe('Persistence', () => {
-    it('restores state from URL hash', async () => {
+    it('restores state with numeric IDs from URL hash', async () => {
       const initialState = {
         title: 'Persistence Test',
         baseUrl: 'https://test.io',
         paramKey: 'key',
         paramValues: [
-          { id: 'v1', value: 'val1' },
+          { id: 1, value: 'val1' },
           { 
-            id: 'g1', 
+            id: 2, 
             type: 'group', 
             name: 'Group 1', 
             expanded: true, 
-            values: [{ id: 'v2', value: 'val2' }] 
+            values: [{ id: 3, value: 'val2' }] 
           }
         ],
       };
@@ -151,10 +145,7 @@ describe('App.vue', () => {
       mockLocation.hash = `#${hash}`;
 
       const wrapper = mount(App);
-      
-      // Wait for multiple layers of async (CompressionStream + CBOR + normalizeData)
       await flushPromises();
-      // Extra tick for good measure in JSDOM
       await new Promise(resolve => setTimeout(resolve, 50));
 
       expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://test.io');

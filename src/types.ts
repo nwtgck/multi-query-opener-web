@@ -7,7 +7,7 @@ import {
   StorageStateDtoSchema,
 } from './schemas';
 
-// DTO Types (Persistence / Transfer) - Keep Readonly for immutability during transit
+// DTO Types (Persistence / Transfer)
 export type ParamValueDto = Readonly<z.infer<typeof ParamValueDtoSchema>>;
 export type ParamGroupDto = Readonly<z.infer<typeof ParamGroupDtoSchema>>;
 export type ParamItemDto = Readonly<z.infer<typeof ParamItemDtoSchema>>;
@@ -16,13 +16,13 @@ export type StorageStateDto = Readonly<z.infer<typeof StorageStateDtoSchema>>;
 
 // Runtime State Types (Mutable for Vue Reactivity)
 export type ParamValue = {
-  id: string,
+  id: number,
   value: string,
 };
 
 export type ParamGroup = {
-  id: string,
-  type: 'group',
+  id: number,
+  readonly type: 'group',
   name: string,
   values: ParamValue[],
   expanded: boolean,

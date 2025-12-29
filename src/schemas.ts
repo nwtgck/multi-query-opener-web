@@ -34,10 +34,7 @@ export const AppStateDtoSchema = z.object({
   title: z.string(),
   baseUrl: z.string(),
   paramKey: z.string(),
-  paramValues: z.array(z.union([
-    ParamItemDtoSchema,
-    z.string(), // Support legacy strings during parse
-  ])),
+  paramValues: z.array(ParamItemDtoSchema),
 });
 
 /**

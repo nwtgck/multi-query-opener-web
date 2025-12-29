@@ -124,8 +124,6 @@ const saveStateToHash = async () => {
  */
 const fromDto = (data: StorageStateDto): AppState => {
   const paramValues = data.paramValues.map((item): ParamItem => {
-    if (typeof item === 'string') return { id: nextId(), value: item };
-    
     // Check if it's a group (it has 'values' array but no 'type' anymore)
     if ('values' in item) {
       return {

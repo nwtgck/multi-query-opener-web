@@ -1,35 +1,61 @@
 import { z, } from 'zod';
 
 /**
- * Schema for a single group of parameter values.
+ * DTO for a single parameter value.
  */
-export const ParamGroupSchema = z.object({
-  type: z.literal('group'),
-  name: z.string(),
-  values: z.array(z.string()),
-  expanded: z.boolean().default(true),
+export const ParamValueDtoSchema = z.object({
+  id: z.string(),
+  value: z.string(),
 });
 
 /**
- * A parameter item can be either a simple string value (for backward compatibility)
- * or a group of values.
+ * DTO for a group of parameter values.
  */
-export const ParamValueSchema = z.union([
-  z.string(),
-  ParamGroupSchema,
+export const ParamGroupDtoSchema = z.object({
+  id: z.string(),
+  type: z.literal('group'),
+  name: z.string(),
+  values: z.array(ParamValueDtoSchema),
+  expanded: z.boolean(),
+});
+
+/**
+ * DTO for any parameter item.
+ */
+export const ParamItemDtoSchema = z.union([
+  ParamValueDtoSchema,
+  ParamGroupDtoSchema,
 ]);
 
 /**
- * Schema for the application state used in storage and runtime.
+ * DTO for the entire application state.
  */
-export const AppStateSchema = z.object({
+export const AppStateDtoSchema = z.object({
   title: z.string(),
   baseUrl: z.string(),
   paramKey: z.string(),
-  paramValues: z.array(ParamValueSchema),
+  paramValues: z.array(ParamItemDtoSchema),
 });
 
 /**
- * For storage, we use the same structure now.
+ * Legacy schema for backward compatibility.
  */
-export const StorageStateSchema = AppStateSchema;
+export const LegacyStateSchema = z.object({
+  title: z.string().optional(),
+  baseUrl: z.string().optional(),
+  paramKey: z.string().optional(),
+  paramValues: z.array(z.union([
+    z.string(),
+    z.object({
+      type: z.literal('group'),
+      name: z.string(),
+      values: z.array(z.string()),
+      expanded: z.boolean().optional(),
+    }),
+  ])).optional(),
+});
+
+/**
+ * Combined storage schema.
+ */
+export const StorageStateDtoSchema = z.union([AppStateDtoSchema, LegacyStateSchema]);

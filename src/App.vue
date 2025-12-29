@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, computed, watch, } from 'vue';
+import { reactive, ref, onMounted, computed, watch, nextTick, } from 'vue';
 import * as CBOR from 'cbor-x';
 import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import Sortable from 'sortablejs';
@@ -34,6 +34,21 @@ const state = reactive<AppState>({
 
 const errorMessage = ref<string | null>(null);
 const isDebugOpen = ref(false);
+const isReady = ref(false);
+
+/**
+ * Check if the state contains any meaningful data that warrants a URL hash.
+ */
+const hasData = () => {
+  if (state.baseUrl.trim() !== '' || state.paramKey.trim() !== '') return true;
+  // If there's more than one item, or the first item isn't just an empty default value
+  if (state.paramValues.length > 1) return true;
+  const first = state.paramValues[0];
+  if (!first) return false;
+  if ('type' in first) return true; // It's a group
+  if (first.value.trim() !== '') return true;
+  return false;
+};
 
 /**
  * Scan data to find the highest ID and update counter to avoid collision.
@@ -115,7 +130,23 @@ const loadStateFromHash = async () => {
 };
 
 watch(() => state.title, (t) => { document.title = t; }, { immediate: true });
-watchDebounced(state, () => { saveStateToHash(); }, { debounce: 500, deep: true });
+watchDebounced(
+  state, 
+  () => { 
+    if (!isReady.value) return;
+    
+    if (!hasData()) {
+      // If no meaningful data, ensure URL hash is empty
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      return;
+    }
+    
+    saveStateToHash(); 
+  }, 
+  { debounce: 500, deep: true }
+);
 
 const addValue = () => { state.paramValues.push({ id: nextId(), value: '' }); };
 const addGroup = () => {
@@ -202,8 +233,9 @@ const sortableOptions: Sortable.Options = {
 };
 
 const paramListRef = ref<HTMLElement | null>(null);
-onMounted(() => {
-  loadStateFromHash();
+onMounted(async () => {
+  await loadStateFromHash();
+  
   if (paramListRef.value) {
     Sortable.create(paramListRef.value, {
       ...sortableOptions,
@@ -211,6 +243,11 @@ onMounted(() => {
       onAdd: (evt) => syncSortable(evt, state.paramValues),
     });
   }
+
+  // Ensure reactivity settles before enabling the watcher
+  nextTick(() => {
+    isReady.value = true;
+  });
 });
 
 const vSortableGroup = {

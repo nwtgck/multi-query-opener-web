@@ -494,7 +494,14 @@ const urlLengthClass = computed(() => {
             </div>
           </div>
 
-          <div class="mt-4 flex justify-end gap-3">
+          <div class="mt-4 flex justify-end items-center gap-3">
+            <label class="flex items-center cursor-pointer gap-2 mr-2">
+              <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Drag Reorder</span>
+              <div class="relative">
+                <input type="checkbox" v-model="isDragEnabled" class="sr-only peer">
+                <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+              </div>
+            </label>
             <button @click="addGroup" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-full text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">Add Group</button>
             <button @click="addValue" class="px-5 py-2.5 text-sm font-medium rounded-full text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">Add Input</button>
           </div>

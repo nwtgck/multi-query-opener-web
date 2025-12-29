@@ -426,7 +426,12 @@ const urlLengthClass = computed(() => {
                 <div class="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50">
                   <div class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 drag-handle"><DragHandleIcon /></div>
                   <button @click="item.expanded = !item.expanded" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><ChevronIcon :expanded="item.expanded" /></button>
-                  <input v-model="item.name" class="flex-1 bg-transparent border-none text-sm font-semibold text-gray-700 dark:text-gray-200 p-0 focus:ring-0" placeholder="Group Name" />
+                  <input 
+                    v-model="item.name" 
+                    class="flex-1 bg-transparent border-none text-sm font-semibold text-gray-700 dark:text-gray-200 p-0 focus:ring-0" 
+                    placeholder="Group Name" 
+                    @focus="($event.target as HTMLInputElement).select()"
+                  />
                   <button @click="removeValue(item.id)" class="text-gray-400 hover:text-red-500" title="Remove Group"><RemoveIcon /></button>
                 </div>
                 <div v-if="item.expanded" v-sortable-group="item.values" class="p-3 space-y-4 min-h-[40px] bg-white dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">

@@ -151,6 +151,7 @@ const saveStateToHash = async () => {
  * Load state from URL hash.
  */
 const loadStateFromHash = async () => {
+  updateUrlLength();
   const hash = window.location.hash.slice(1);
   if (!hash) return;
 

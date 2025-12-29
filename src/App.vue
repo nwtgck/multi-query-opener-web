@@ -424,15 +424,15 @@ const urlLengthClass = computed(() => {
         <section class="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
           <div class="sm:col-span-2">
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Page Title</label>
-            <input v-model="state.title" type="text" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.title" data-testid="page-title-input" type="text" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div>
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
-            <input v-model="state.baseUrl" type="url" placeholder="https://example.com/search" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.baseUrl" data-testid="base-url-input" type="url" placeholder="https://example.com/search" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div>
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Query Parameter Name</label>
-            <input v-model="state.paramKey" type="text" placeholder="q" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.paramKey" data-testid="param-key-input" type="text" placeholder="q" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
         </section>
 

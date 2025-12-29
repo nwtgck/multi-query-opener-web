@@ -4,7 +4,7 @@ import * as CBOR from 'cbor-x';
 import App from './App.vue';
 
 /**
- * Sync Mock for CompressionStream/DecompressionStream.
+ * Sync Mock for CompressionStream/DecompressionStream to stabilize tests.
  */
 class MockTransformStream {
   readable: ReadableStream;
@@ -77,10 +77,13 @@ describe('App.vue', () => {
     it('updates state and document title when inputs change', async () => {
       vi.useFakeTimers();
       const wrapper = mount(App);
-      const titleInput = wrapper.find('input[type="text"]');
+      const titleInput = wrapper.find('[data-testid="page-title-input"]');
       await titleInput.setValue('My Custom Title');
+      
+      // Wait for debounce (500ms)
       vi.advanceTimersByTime(500);
       await flushPromises();
+      
       expect(document.title).toBe('My Custom Title');
       vi.useRealTimers();
     });
@@ -90,13 +93,15 @@ describe('App.vue', () => {
     it('opens all URLs from root and groups', async () => {
       const wrapper = mount(App);
       
-      const inputs = wrapper.findAll('input');
-      await inputs[1]!.setValue('https://example.com');
-      await inputs[2]!.setValue('q');
+      // Fill base config using data-testid
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
 
+      // Set root value
       const rootTextarea = wrapper.find('textarea');
       await rootTextarea.setValue('root-val');
 
+      // Add group and values
       const buttons = wrapper.findAll('button');
       const addGroupBtn = buttons.find(b => b.text() === 'Add Group');
       await addGroupBtn?.trigger('click');
@@ -123,22 +128,20 @@ describe('App.vue', () => {
   describe('Error reporting', () => {
     it('shows error when configuration is missing', async () => {
       const wrapper = mount(App);
+      
+      // Clear config
+      await wrapper.find('[data-testid="base-url-input"]').setValue('');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('');
+      
       const openAllBtn = wrapper.findAll('button').find(b => b.text() === 'Open All in New Tabs');
-      
-      // Clear inputs
-      const inputs = wrapper.findAll('input');
-      await inputs[1]!.setValue(''); // Base URL
-      await inputs[2]!.setValue(''); // Param Key
-      
       await openAllBtn?.trigger('click');
       expect(wrapper.text()).toContain('Please enter both Base URL and Query Parameter Name');
     });
 
     it('shows error when popups are blocked', async () => {
       const wrapper = mount(App);
-      const inputs = wrapper.findAll('input');
-      await inputs[1]!.setValue('https://example.com');
-      await inputs[2]!.setValue('q');
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
       await wrapper.find('textarea').setValue('test');
 
       // Simulate popup blocked
@@ -152,15 +155,14 @@ describe('App.vue', () => {
 
     it('shows singular error when an individual popup is blocked', async () => {
       const wrapper = mount(App);
-      const inputs = wrapper.findAll('input');
-      await inputs[1]!.setValue('https://example.com');
-      await inputs[2]!.setValue('q');
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
       await wrapper.find('textarea').setValue('test');
 
       // Simulate popup blocked
       mockOpen.mockReturnValue(null);
 
-      // Find the individual open button (the one with the OpenIcon/title)
+      // Find the individual open button
       const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
       await openSingleBtn.trigger('click');
 
@@ -169,8 +171,7 @@ describe('App.vue', () => {
 
     it('shows configuration error when individual button is clicked without config', async () => {
       const wrapper = mount(App);
-      const inputs = wrapper.findAll('input');
-      await inputs[1]!.setValue(''); // No Base URL
+      await wrapper.find('[data-testid="base-url-input"]').setValue('');
       
       const openSingleBtn = wrapper.find('button[title="Open in new tab"]');
       await openSingleBtn.trigger('click');
@@ -180,7 +181,7 @@ describe('App.vue', () => {
   });
 
   describe('Persistence', () => {
-    it('restores state with numeric IDs from URL hash', async () => {
+    it('restores state from URL hash', async () => {
       const initialState = {
         title: 'Persistence Test',
         baseUrl: 'https://test.io',
@@ -191,7 +192,6 @@ describe('App.vue', () => {
             id: 2, 
             name: 'Group 1', 
             values: [{ id: 3, value: 'val2' }] 
-            // expanded: true is omitted in optimized DTO
           }
         ],
       };
@@ -206,7 +206,7 @@ describe('App.vue', () => {
       await flushPromises();
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://test.io');
+      expect((wrapper.find('[data-testid="base-url-input"]').element as HTMLInputElement).value).toBe('https://test.io');
       const textareas = wrapper.findAll('textarea');
       expect(textareas.length).toBe(2);
       expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('val1');
@@ -231,7 +231,7 @@ describe('App.vue', () => {
       await flushPromises();
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      expect((wrapper.find('input[type="url"]').element as HTMLInputElement).value).toBe('https://legacy.io');
+      expect((wrapper.find('[data-testid="base-url-input"]').element as HTMLInputElement).value).toBe('https://legacy.io');
       const textareas = wrapper.findAll('textarea');
       expect(textareas.length).toBe(2);
       expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe('legacy1');

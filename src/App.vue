@@ -358,7 +358,9 @@ onMounted(() => {
           </select>
         </div>
         <h1 data-testid="app-title" class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-          {{ state.title || 'Multi Query Opener' }}
+          <a href="./" class="hover:opacity-80 transition-opacity">
+            {{ state.title || 'Multi Query Opener' }}
+          </a>
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Open multiple URLs at once with different query parameters. State is saved in the URL fragment.

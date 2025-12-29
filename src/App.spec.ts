@@ -116,6 +116,61 @@ describe('App.vue', () => {
     });
   });
 
+  describe('Grouping functionality', () => {
+    it('can add a group and nested values', async () => {
+      const wrapper = mount(App);
+      const addGroupBtn = wrapper.find('button:contains("Add Group")');
+      // If contains doesn't work in this version of test-utils, find by text
+      const buttons = wrapper.findAll('button');
+      const addGroupButton = buttons.find(b => b.text() === 'Add Group');
+      
+      await addGroupButton?.trigger('click');
+      
+      expect(wrapper.html()).toContain('Group Name');
+      expect(wrapper.html()).toContain('Add Value to Group');
+    });
+
+    it('opens URLs from both root and groups', async () => {
+      const wrapper = mount(App);
+      await wrapper.find('[data-testid="base-url-input"]').setValue('https://example.com');
+      await wrapper.find('[data-testid="param-key-input"]').setValue('q');
+      
+      // Set root value
+      const rootTextareas = wrapper.findAll('[data-testid="param-value-input"]');
+      await rootTextareas[0]!.setValue('root-val');
+      
+      // Add group and value
+      const buttons = wrapper.findAll('button');
+      const addGroupButton = buttons.find(b => b.text() === 'Add Group');
+      await addGroupButton?.trigger('click');
+      
+      // Find the group's "Add Value to Group" button
+      const addValToGroupBtn = wrapper.find('button:contains("+ Add Value to Group")');
+      // Again, using text search if needed
+      const allButtons = wrapper.findAll('button');
+      const addValBtn = allButtons.find(b => b.text() === '+ Add Value to Group');
+      await addValBtn?.trigger('click');
+
+      // Now we should have 3 textareas: 1 root, 2 in group (because group starts with 1)
+      const allTextareas = wrapper.findAll('textarea');
+      // Root is usually first, but let's be safe. In our template root items and group items are mixed.
+      // Group values are also rendered as textareas but without data-testid="param-value-input" currently
+      // Actually, I should have added data-testid to group values too.
+      
+      await allTextareas[1]!.setValue('group-val-1');
+      await allTextareas[2]!.setValue('group-val-2');
+
+      mockOpen.mockReturnValue({} as Window);
+      const openAllBtn = wrapper.find('[data-testid="open-all-btn"]');
+      await openAllBtn.trigger('click');
+
+      expect(mockOpen).toHaveBeenCalledTimes(3);
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=root-val'), '_blank', 'noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=group-val-1'), '_blank', 'noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining('q=group-val-2'), '_blank', 'noreferrer');
+    });
+  });
+
   describe('URL Fragment persistence', () => {
     it('updates URL hash when state changes (debounced)', async () => {
       const wrapper = mount(App);

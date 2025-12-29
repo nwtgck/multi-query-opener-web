@@ -3,13 +3,13 @@ import { reactive, ref, onMounted, computed, watch, } from 'vue';
 import * as CBOR from 'cbor-x';
 import { useClipboard, watchDebounced, useColorMode, } from '@vueuse/core';
 import { useSortable, } from '@vueuse/integrations/useSortable';
-import type { AppState, } from './types';
 import { StorageStateSchema, } from './schemas';
 import DragHandleIcon from './components/icons/DragHandleIcon.vue';
 import RemoveIcon from './components/icons/RemoveIcon.vue';
 import OpenIcon from './components/icons/OpenIcon.vue';
 import ErrorIcon from './components/icons/ErrorIcon.vue';
 import CloseIcon from './components/icons/CloseIcon.vue';
+import ChevronIcon from './components/icons/ChevronIcon.vue';
 import {
   compressData,
   decompressData,
@@ -24,7 +24,7 @@ const state = reactive({
   title: 'Multi Query Opener',
   baseUrl: '',
   paramKey: '',
-  paramValues: [''],
+  paramValues: [''] as (string | { type: 'group'; name: string; values: string[]; expanded: boolean })[],
 });
 
 /**
@@ -47,20 +47,23 @@ const isErrorExpanded = ref(false);
  */
 const saveStateToHash = async () => {
   try {
-    const data: AppState = {
+    const data: any = {
       title: state.title,
       baseUrl: state.baseUrl,
       paramKey: state.paramKey,
-      paramValues: state.paramValues.filter((v) => v.trim() !== ''),
+      paramValues: state.paramValues.map((v) => {
+        if (typeof v === 'string') return v;
+        return {
+          ...v,
+          values: v.values.filter((sv) => sv.trim() !== ''),
+        };
+      }).filter((v) => {
+        if (typeof v === 'string') return v.trim() !== '';
+        return true;
+      }),
     };
 
-    const cborData = CBOR.encode({
-      title: data.title,
-      baseUrl: data.baseUrl,
-      paramKey: data.paramKey,
-      paramValues: data.paramValues,
-    });
-
+    const cborData = CBOR.encode(data);
     const compressed = await compressData(cborData);
     const hash = toBase64(compressed);
     window.history.replaceState(null, '', `#${hash}`);
@@ -141,11 +144,38 @@ const addValue = () => {
   state.paramValues.push('');
 };
 
+const addGroup = () => {
+  state.paramValues.push({
+    type: 'group',
+    name: 'New Group',
+    values: [''],
+    expanded: true,
+  });
+};
+
 const removeValue = (index: number) => {
   if (state.paramValues.length > 1) {
     state.paramValues.splice(index, 1);
   } else {
     state.paramValues[0] = '';
+  }
+};
+
+const addValueToGroup = (groupIndex: number) => {
+  const item = state.paramValues[groupIndex];
+  if (item && typeof item !== 'string' && item.type === 'group') {
+    item.values.push('');
+  }
+};
+
+const removeValueFromGroup = (groupIndex: number, valueIndex: number) => {
+  const item = state.paramValues[groupIndex];
+  if (item && typeof item !== 'string' && item.type === 'group') {
+    if (item.values.length > 1) {
+      item.values.splice(valueIndex, 1);
+    } else {
+      item.values[0] = '';
+    }
   }
 };
 
@@ -193,7 +223,17 @@ const openAll = () => {
 
   if (!validateConfig()) return;
 
-  const activeValues = state.paramValues.filter((v) => v.trim() !== '');
+  const activeValues: string[] = [];
+  for (const item of state.paramValues) {
+    if (typeof item === 'string') {
+      if (item.trim()) activeValues.push(item);
+    } else {
+      for (const val of item.values) {
+        if (val.trim()) activeValues.push(val);
+      }
+    }
+  }
+
   if (activeValues.length === 0) {
     errorMessage.value = 'Please enter at least one query parameter value.';
     return;
@@ -237,6 +277,20 @@ useSortable(paramListRef, state.paramValues, {
   handle: '.drag-handle',
   animation: 150,
 });
+
+/**
+ * Component to handle nested sortable for groups.
+ * Since we're in a single file, we can use a small functional approach
+ * or just a custom directive-like effect.
+ */
+const vSortable = {
+  mounted: (el: HTMLElement, binding: any) => {
+    useSortable(el, binding.value, {
+      handle: '.group-drag-handle',
+      animation: 150,
+    });
+  },
+};
 
 /**
  * Current URL length for user reference.
@@ -374,44 +428,125 @@ onMounted(() => {
           
           <div ref="paramListRef" class="space-y-4">
             <div
-              v-for="(_, index) in state.paramValues"
+              v-for="(item, index) in state.paramValues"
               :key="index"
-              class="relative flex items-start gap-2 group"
-              data-testid="param-item"
+              class="group/item"
+              data-testid="param-item-container"
             >
-              <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
-                <DragHandleIcon />
-              </div>
-              <div class="flex-1 relative">
-                <textarea
-                  v-model="state.paramValues[index]"
-                  rows="2"
-                  data-testid="param-value-input"
-                  class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                  placeholder="Enter value..."
-                ></textarea>
+              <!-- Single Value Item -->
+              <div v-if="typeof item === 'string'" class="relative flex items-start gap-2">
+                <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
+                  <DragHandleIcon />
+                </div>
+                <div class="flex-1 relative">
+                  <textarea
+                    v-model="state.paramValues[index] as string"
+                    rows="2"
+                    data-testid="param-value-input"
+                    class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                    placeholder="Enter value..."
+                  ></textarea>
+                  <button
+                    @click="removeValue(index)"
+                    data-testid="remove-value-btn"
+                    class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                    title="Remove"
+                  >
+                    <RemoveIcon />
+                  </button>
+                </div>
                 <button
-                  @click="removeValue(index)"
-                  data-testid="remove-value-btn"
-                  class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
-                  title="Remove"
+                  @click="openSingleUrl(item)"
+                  type="button"
+                  title="Open in new tab"
+                  data-testid="open-single-btn"
+                  class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-600 dark:hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
                 >
-                  <RemoveIcon />
+                  <OpenIcon />
                 </button>
               </div>
-              <button
-                @click="openSingleUrl(state.paramValues[index]!)"
-                type="button"
-                title="Open in new tab"
-                data-testid="open-single-btn"
-                class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-600 dark:hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
-              >
-                <OpenIcon />
-              </button>
+
+              <!-- Group Item -->
+              <div v-else class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-800/50">
+                <div class="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700/50">
+                  <div class="cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 drag-handle">
+                    <DragHandleIcon />
+                  </div>
+                  <button 
+                    @click="item.expanded = !item.expanded"
+                    class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    <ChevronIcon :expanded="item.expanded" />
+                  </button>
+                  <input 
+                    v-model="item.name"
+                    type="text"
+                    class="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 dark:text-gray-200 p-0"
+                    placeholder="Group Name"
+                  />
+                  <button
+                    @click="removeValue(index)"
+                    class="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                    title="Remove Group"
+                  >
+                    <RemoveIcon />
+                  </button>
+                </div>
+                
+                <div v-if="item.expanded" v-sortable="item.values" class="p-3 space-y-4">
+                  <div 
+                    v-for="(_, vIndex) in item.values" 
+                    :key="vIndex"
+                    class="relative flex items-start gap-2 pl-2"
+                  >
+                    <div class="mt-3 cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 group-drag-handle">
+                      <DragHandleIcon />
+                    </div>
+                    <div class="flex-1 relative">
+                      <textarea
+                        v-model="item.values[vIndex]"
+                        rows="2"
+                        class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border pr-10 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                        placeholder="Enter value..."
+                      ></textarea>
+                      <button
+                        @click="removeValueFromGroup(index, vIndex)"
+                        class="absolute top-2 right-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+                        title="Remove"
+                      >
+                        <RemoveIcon />
+                      </button>
+                    </div>
+                    <button
+                      @click="openSingleUrl(item.values[vIndex] || '')"
+                      type="button"
+                      class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 shadow-sm"
+                    >
+                      <OpenIcon />
+                    </button>
+                  </div>
+                  <div class="flex justify-start pl-6">
+                    <button
+                      @click="addValueToGroup(index)"
+                      type="button"
+                      class="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      + Add Value to Group
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="mt-4 flex justify-end">
+          <div class="mt-4 flex justify-end gap-3">
+            <button
+              @click="addGroup"
+              type="button"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-full shadow-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+            >
+              Add Group
+            </button>
             <button
               @click="addValue"
               data-testid="add-input-btn"
@@ -467,4 +602,7 @@ onMounted(() => {
 
 <style>
 /* Base styles already handled by Tailwind */
+.rotate-180 {
+  transform: rotate(180deg);
+}
 </style>

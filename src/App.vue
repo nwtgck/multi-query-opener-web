@@ -328,6 +328,11 @@ const sortableOptions: Sortable.Options = {
   group: 'params',
   ghostClass: 'sortable-ghost',
   disabled: !isDragEnabled.value,
+  // 300ms delay for touch devices to prevent accidental drags during scrolling
+  delay: 300,
+  delayOnTouchOnly: true,
+  // Provide a threshold to allow some movement before drag cancels (helps with shaky fingers)
+  touchStartThreshold: 5,
 };
 
 // Update all instances when toggle changes

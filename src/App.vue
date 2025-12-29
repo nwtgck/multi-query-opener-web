@@ -31,6 +31,7 @@ const state = reactive<AppState>({
 });
 
 const errorMessage = ref<string | null>(null);
+const isDebugOpen = ref(false);
 
 const normalizeData = (decoded: any): AppState => {
   const paramValues = (decoded.paramValues || []).map((item: any): ParamItem => {
@@ -361,6 +362,19 @@ const urlLengthClass = computed(() => {
           </div>
         </div>
       </main>
+
+      <footer class="mt-8 text-center text-xs text-gray-500">
+        <p>All data is stored in the URL fragment after being encoded with CBOR and compressed with Gzip.</p>
+        <details 
+          class="mt-4 text-left opacity-30 hover:opacity-100 transition-opacity duration-300"
+          @toggle="isDebugOpen = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary class="cursor-pointer text-center list-none hover:text-indigo-500 transition-colors focus:outline-none">Debug State (JSON)</summary>
+          <div v-if="isDebugOpen" class="mt-2 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-inner overflow-auto max-h-60">
+            <pre class="text-[10px] font-mono whitespace-pre-wrap text-gray-600 dark:text-gray-400">{{ JSON.stringify(state, null, 2) }}</pre>
+          </div>
+        </details>
+      </footer>
     </div>
   </div>
 </template>

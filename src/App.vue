@@ -1,44 +1,44 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, computed, watch, nextTick, } from 'vue';
-import * as CBOR from 'cbor-x';
-import { useClipboard, watchDebounced, useColorMode, useLocalStorage, } from '@vueuse/core';
-import Sortable from 'sortablejs';
-import { StorageStateDtoSchema, } from './schemas';
+import { reactive, ref, onMounted, computed, watch, nextTick } from "vue";
+import * as CBOR from "cbor-x";
+import { useClipboard, watchDebounced, useColorMode, useLocalStorage } from "@vueuse/core";
+import Sortable from "sortablejs";
+import { StorageStateDtoSchema } from "./schemas";
 import type { 
   ParamItem, 
   ParamValue, 
   ParamGroup, 
   AppState,
   StorageStateDto,
-} from './types';
-import DragHandleIcon from './components/icons/DragHandleIcon.vue';
-import RemoveIcon from './components/icons/RemoveIcon.vue';
-import OpenIcon from './components/icons/OpenIcon.vue';
-import ErrorIcon from './components/icons/ErrorIcon.vue';
-import CloseIcon from './components/icons/CloseIcon.vue';
-import ChevronIcon from './components/icons/ChevronIcon.vue';
+} from "./types";
+import DragHandleIcon from "./components/icons/DragHandleIcon.vue";
+import RemoveIcon from "./components/icons/RemoveIcon.vue";
+import OpenIcon from "./components/icons/OpenIcon.vue";
+import ErrorIcon from "./components/icons/ErrorIcon.vue";
+import CloseIcon from "./components/icons/CloseIcon.vue";
+import ChevronIcon from "./components/icons/ChevronIcon.vue";
 import {
   compressData,
   decompressData,
   toBase64,
   fromBase64,
-} from './utils';
+} from "./utils";
 
 // Global counter for sequential IDs
 let _idCounter = 0;
 const nextId = () => ++_idCounter;
 
 const state = reactive<AppState>({
-  title: 'Multi Query Opener',
-  baseUrl: '',
-  paramKey: '',
+  title: "Multi Query Opener",
+  baseUrl: "",
+  paramKey: "",
   paramValues: [],
 });
 
 const errorMessage = ref<string | null>(null);
 const isDebugOpen = ref(false);
 const isReady = ref(false);
-const isDragEnabled = useLocalStorage('mqo-drag-enabled', true);
+const isDragEnabled = useLocalStorage("mqo-drag-enabled", true);
 
 // Store sortable instances to update their 'disabled' state
 const sortableInstances: Sortable[] = [];
@@ -47,12 +47,12 @@ const sortableInstances: Sortable[] = [];
  * Check if the state contains any meaningful data that warrants a URL hash.
  */
 const hasData = () => {
-  if (state.baseUrl.trim() !== '' || state.paramKey.trim() !== '') return true;
+  if (state.baseUrl.trim() !== "" || state.paramKey.trim() !== "") return true;
   if (state.paramValues.length > 1) return true;
   const first = state.paramValues[0];
   if (!first) return false;
-  if ('type' in first) return true;
-  if (first.value.trim() !== '') return true;
+  if ("type" in first) return true;
+  if (first.value.trim() !== "") return true;
   return false;
 };
 
@@ -60,12 +60,12 @@ const hasData = () => {
  * Scan data to find the highest ID and update counter to avoid collision.
  */
 const syncIdCounter = (items: ParamItem[]) => {
-  items.forEach(item => {
+  for (const item of items) {
     if (item.id > _idCounter) _idCounter = item.id;
-    if ('type' in item && item.type === 'group') {
-      item.values.forEach(v => { if (v.id > _idCounter) _idCounter = v.id; });
+    if ("type" in item && item.type === "group") {
+      for (const v of item.values) { if (v.id > _idCounter) _idCounter = v.id; }
     }
-  });
+  }
 };
 
 const findAndRemoveItemData = (id: number): ParamItem | null => {
@@ -73,7 +73,7 @@ const findAndRemoveItemData = (id: number): ParamItem | null => {
   if (topIdx !== -1) return (state.paramValues as ParamItem[]).splice(topIdx, 1)[0] || null;
   
   for (const item of state.paramValues) {
-    if ('type' in item && item.type === 'group') {
+    if ("type" in item && item.type === "group") {
       const gIdx = item.values.findIndex(v => v.id === id);
       if (gIdx !== -1) return (item.values as ParamValue[]).splice(gIdx, 1)[0] || null;
     }
@@ -92,7 +92,7 @@ const toDto = () => {
     baseUrl: state.baseUrl,
     paramKey: state.paramKey,
     paramValues: state.paramValues.map(item => {
-      if ('type' in item && item.type === 'group') {
+      if ("type" in item && item.type === "group") {
         return {
           id: item.id,
           name: item.name,
@@ -112,10 +112,10 @@ const saveStateToHash = async () => {
     const cborData = CBOR.encode(dto);
     const compressed = await compressData(cborData);
     const hash = toBase64(compressed);
-    window.history.replaceState(null, '', `#${hash}`);
+    window.history.replaceState(null, "", `#${hash}`);
     updateUrlLength();
   } catch (e) {
-    console.error('Failed to save state:', e);
+    console.error("Failed to save state:", e);
   }
 };
 
@@ -125,16 +125,16 @@ const saveStateToHash = async () => {
 const fromDto = (data: StorageStateDto): AppState => {
   const paramValues = data.paramValues.map((item): ParamItem => {
     // Check if it's a group (it has 'values' array but no 'type' anymore)
-    if ('values' in item) {
+    if ("values" in item) {
       return {
         id: item.id,
-        type: 'group',
+        type: "group",
         name: item.name,
         // expanded: undefined -> true, expanded: false -> false
         expanded: item.expanded !== false,
         values: item.values.map((v): ParamValue => ({ 
           id: v.id, 
-          value: v.value 
+          value: v.value, 
         })),
       };
     }
@@ -147,7 +147,7 @@ const fromDto = (data: StorageStateDto): AppState => {
     title: data.title,
     baseUrl: data.baseUrl,
     paramKey: data.paramKey,
-    paramValues: paramValues.length > 0 ? paramValues : [{ id: nextId(), value: '' }],
+    paramValues: paramValues.length > 0 ? paramValues : [{ id: nextId(), value: "" }],
   };
 };
 
@@ -155,7 +155,7 @@ const loadStateFromHash = async () => {
   updateUrlLength();
   const hash = window.location.hash.slice(1);
   if (!hash) {
-    state.paramValues = [{ id: nextId(), value: '' }];
+    state.paramValues = [{ id: nextId(), value: "" }];
     return;
   }
 
@@ -174,8 +174,8 @@ const loadStateFromHash = async () => {
       state.paramValues.splice(0, state.paramValues.length, ...normalized.paramValues);
     }
   } catch (e) {
-    console.error('Failed to load state:', e);
-    errorMessage.value = 'Failed to load settings from URL.';
+    console.error("Failed to load state:", e);
+    errorMessage.value = "Failed to load settings from URL.";
   } finally {
     updateUrlLength();
   }
@@ -187,21 +187,21 @@ watchDebounced(
   () => { 
     if (!isReady.value) return;
     if (!hasData()) {
-      if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
       return;
     }
     saveStateToHash(); 
   }, 
-  { debounce: 500, deep: true }
+  { debounce: 500, deep: true },
 );
 
-const addValue = () => { state.paramValues.push({ id: nextId(), value: '' }); };
+const addValue = () => { state.paramValues.push({ id: nextId(), value: "" }); };
 const addGroup = () => {
   state.paramValues.push({
     id: nextId(),
-    type: 'group',
-    name: 'New Group',
-    values: [{ id: nextId(), value: '' }],
+    type: "group",
+    name: "New Group",
+    values: [{ id: nextId(), value: "" }],
     expanded: true,
   });
 };
@@ -216,7 +216,7 @@ const removeValue = (id: number) => {
 
 const addValueToGroup = (groupId: number) => {
   const g = state.paramValues.find(v => v.id === groupId) as ParamGroup | undefined;
-  if (g) g.values.push({ id: nextId(), value: '' });
+  if (g) g.values.push({ id: nextId(), value: "" });
 };
 
 const removeValueFromGroup = (groupId: number, valueId: number) => {
@@ -225,14 +225,14 @@ const removeValueFromGroup = (groupId: number, valueId: number) => {
     const vIdx = g.values.findIndex(v => v.id === valueId);
     if (vIdx !== -1) {
       g.values.splice(vIdx, 1);
-      if (g.values.length === 0) g.values.push({ id: nextId(), value: '' });
+      if (g.values.length === 0) g.values.push({ id: nextId(), value: "" });
     }
   }
 };
 
 const validateConfig = (): boolean => {
   if (!state.baseUrl.trim() || !state.paramKey.trim()) {
-    errorMessage.value = 'Please enter both Base URL and Query Parameter Name.';
+    errorMessage.value = "Please enter both Base URL and Query Parameter Name.";
     return false;
   }
   return true;
@@ -242,21 +242,21 @@ const openSingleUrl = (val: string, suppressError = false): boolean => {
   if (!suppressError) errorMessage.value = null;
   if (!validateConfig()) return false;
   if (!val.trim()) {
-    if (!suppressError) errorMessage.value = 'Please enter a value for the query parameter.';
+    if (!suppressError) errorMessage.value = "Please enter a value for the query parameter.";
     return false;
   }
 
   try {
     const url = new URL(state.baseUrl);
     url.searchParams.append(state.paramKey, val.trim());
-    const win = window.open(url.toString(), '_blank', 'noreferrer');
+    const win = window.open(url.toString(), "_blank", "noreferrer");
     if (win === null) {
-      if (!suppressError) errorMessage.value = 'The tab was blocked by your browser. Please allow pop-ups for this site.';
+      if (!suppressError) errorMessage.value = "The tab was blocked by your browser. Please allow pop-ups for this site.";
       return false;
     }
     return true;
-  } catch (e) {
-    if (!suppressError) errorMessage.value = 'Invalid Base URL configuration.';
+  } catch {
+    if (!suppressError) errorMessage.value = "Invalid Base URL configuration.";
     return false;
   }
 };
@@ -266,24 +266,24 @@ const openAll = () => {
   if (!validateConfig()) return;
 
   const activeValues: string[] = [];
-  state.paramValues.forEach(item => {
-    if ('type' in item && item.type === 'group') {
-      item.values.forEach(v => { if (v.value.trim()) activeValues.push(v.value); });
+  for (const item of state.paramValues) {
+    if ("type" in item && item.type === "group") {
+      for (const v of item.values) { if (v.value.trim()) activeValues.push(v.value); }
     } else {
       if ((item as ParamValue).value.trim()) activeValues.push((item as ParamValue).value);
     }
-  });
+  }
 
   if (activeValues.length === 0) {
-    errorMessage.value = 'Please enter at least one query parameter value.';
+    errorMessage.value = "Please enter at least one query parameter value.";
     return;
   }
 
   let blockedCount = 0;
-  activeValues.forEach(val => {
+  for (const val of activeValues) {
     const success = openSingleUrl(val, true);
     if (!success) blockedCount++;
-  });
+  }
 
   if (blockedCount > 0) {
     errorMessage.value = `${blockedCount} tabs were blocked by your browser. Please allow pop-ups for this site.`;
@@ -292,7 +292,7 @@ const openAll = () => {
 
 const { copy, copied } = useClipboard();
 const copyShareLink = () => copy(window.location.href);
-const colorMode = useColorMode({ initialValue: 'auto' });
+const colorMode = useColorMode({ initialValue: "auto" });
 
 /**
  * Core Sorting Logic for Vue Reactivity.
@@ -309,8 +309,8 @@ const syncSortable = <T extends ParamItem>(evt: Sortable.SortableEvent, list: T[
         list.splice(newIndex, 0, movedItem);
       }
     }
-  } else if (evt.type === 'add') {
-    const id = Number(item.getAttribute('data-id'));
+  } else if (evt.type === "add") {
+    const id = Number(item.getAttribute("data-id"));
     if (isNaN(id)) return;
     
     const itemData = findAndRemoveItemData(id);
@@ -323,10 +323,10 @@ const syncSortable = <T extends ParamItem>(evt: Sortable.SortableEvent, list: T[
 };
 
 const sortableOptions: Sortable.Options = {
-  handle: '.drag-handle',
+  handle: ".drag-handle",
   animation: 150,
-  group: 'params',
-  ghostClass: 'sortable-ghost',
+  group: "params",
+  ghostClass: "sortable-ghost",
   disabled: !isDragEnabled.value,
   // 300ms delay for touch devices to prevent accidental drags during scrolling
   delay: 300,
@@ -337,7 +337,7 @@ const sortableOptions: Sortable.Options = {
 
 // Update all instances when toggle changes
 watch(isDragEnabled, (enabled) => {
-  sortableInstances.forEach(s => s.option('disabled', !enabled));
+  for (const s of sortableInstances) s.option("disabled", !enabled);
 });
 
 const paramListRef = ref<HTMLElement | null>(null);
@@ -358,7 +358,7 @@ const vSortableGroup = {
   mounted: (el: HTMLElement, binding: { value: ParamValue[] }) => {
     const s = Sortable.create(el, {
       ...sortableOptions,
-      onMove: (evt) => !evt.dragged.hasAttribute('data-is-group'),
+      onMove: (evt) => !evt.dragged.hasAttribute("data-is-group"),
       onUpdate: (evt) => syncSortable(evt, binding.value),
       onAdd: (evt) => syncSortable(evt, binding.value),
     });
@@ -370,7 +370,7 @@ const currentUrlLength = ref(0);
 const updateUrlLength = () => { currentUrlLength.value = window.location.href.length; };
 const urlLengthClass = computed(() => {
   const l = currentUrlLength.value;
-  return l > 4000 ? 'text-red-600 bg-red-50' : l > 2000 ? 'text-orange-600 bg-orange-50' : 'text-gray-500 bg-gray-50';
+  return l > 4000 ? "text-red-600 bg-red-50" : l > 2000 ? "text-orange-600 bg-orange-50" : "text-gray-500 bg-gray-50";
 });
 </script>
 
@@ -382,8 +382,8 @@ const urlLengthClass = computed(() => {
           <label class="flex items-center cursor-pointer gap-2 mr-2">
             <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Drag Reorder</span>
             <div class="relative">
-              <input type="checkbox" v-model="isDragEnabled" class="sr-only peer">
-              <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+              <input v-model="isDragEnabled" type="checkbox" class="sr-only peer">
+              <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" />
             </div>
           </label>
           <select v-model="colorMode" class="text-xs border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:text-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
@@ -416,8 +416,8 @@ const urlLengthClass = computed(() => {
           </div>
         </div>
         <button
-          @click="errorMessage = null"
           class="ml-auto pl-3 text-red-500 hover:text-red-600 focus:outline-none"
+          @click="errorMessage = null"
         >
           <CloseIcon class="w-5 h-5" />
         </button>
@@ -427,15 +427,15 @@ const urlLengthClass = computed(() => {
         <section class="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
           <div class="sm:col-span-2">
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Page Title</label>
-            <input v-model="state.title" data-testid="page-title-input" type="text" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.title" data-testid="page-title-input" type="text" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500">
           </div>
           <div>
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
-            <input v-model="state.baseUrl" data-testid="base-url-input" type="url" placeholder="https://example.com/search" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.baseUrl" data-testid="base-url-input" type="url" placeholder="https://example.com/search" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500">
           </div>
           <div>
             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Query Parameter Name</label>
-            <input v-model="state.paramKey" data-testid="param-key-input" type="text" placeholder="q" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500" />
+            <input v-model="state.paramKey" data-testid="param-key-input" type="text" placeholder="q" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border focus:ring-indigo-500 focus:border-indigo-500">
           </div>
         </section>
 
@@ -456,10 +456,10 @@ const urlLengthClass = computed(() => {
                   <DragHandleIcon />
                 </div>
                 <div class="flex-1 relative">
-                  <textarea v-model="item.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..."></textarea>
-                  <button @click="removeValue(item.id)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove"><RemoveIcon /></button>
+                  <textarea v-model="item.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..." />
+                  <button class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove" @click="removeValue(item.id)"><RemoveIcon /></button>
                 </div>
-                <button @click="openSingleUrl(item.value)" class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab"><OpenIcon /></button>
+                <button class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab" @click="openSingleUrl(item.value)"><OpenIcon /></button>
               </div>
 
               <div v-else class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-800/50">
@@ -470,14 +470,14 @@ const urlLengthClass = computed(() => {
                   >
                     <DragHandleIcon />
                   </div>
-                  <button @click="item.expanded = !item.expanded" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"><ChevronIcon :expanded="item.expanded" /></button>
+                  <button class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="item.expanded = !item.expanded"><ChevronIcon :expanded="item.expanded" /></button>
                   <input 
                     v-model="item.name" 
                     class="flex-1 bg-transparent border-none text-sm font-semibold text-gray-700 dark:text-gray-200 p-0 focus:ring-0" 
                     placeholder="Group Name" 
                     @focus="($event.target as HTMLInputElement).select()"
-                  />
-                  <button @click="removeValue(item.id)" class="text-gray-400 hover:text-red-500" title="Remove Group"><RemoveIcon /></button>
+                  >
+                  <button class="text-gray-400 hover:text-red-500" title="Remove Group" @click="removeValue(item.id)"><RemoveIcon /></button>
                 </div>
                 <div v-if="item.expanded" v-sortable-group="item.values" class="p-3 space-y-4 min-h-[40px] bg-white dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
                   <div v-for="vItem in item.values" :key="vItem.id" :data-id="vItem.id" class="flex items-start gap-2">
@@ -488,12 +488,12 @@ const urlLengthClass = computed(() => {
                       <DragHandleIcon />
                     </div>
                     <div class="flex-1 relative">
-                      <textarea v-model="vItem.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..."></textarea>
-                      <button @click="removeValueFromGroup(item.id, vItem.id)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove"><RemoveIcon /></button>
+                      <textarea v-model="vItem.value" rows="2" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm p-2.5 border pr-10 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter value..." />
+                      <button class="absolute top-2 right-2 text-gray-400 hover:text-red-500" title="Remove" @click="removeValueFromGroup(item.id, vItem.id)"><RemoveIcon /></button>
                     </div>
-                    <button @click="openSingleUrl(vItem.value)" class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab"><OpenIcon /></button>
+                    <button class="mt-1 p-2.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-gray-700 shadow-sm" title="Open in new tab" @click="openSingleUrl(vItem.value)"><OpenIcon /></button>
                   </div>
-                  <button @click="addValueToGroup(item.id)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500">+ Add Value to Group</button>
+                  <button class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500" @click="addValueToGroup(item.id)">+ Add Value to Group</button>
                 </div>
               </div>
             </div>
@@ -503,18 +503,18 @@ const urlLengthClass = computed(() => {
             <label class="flex items-center cursor-pointer gap-2 mr-2">
               <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Drag Reorder</span>
               <div class="relative">
-                <input type="checkbox" v-model="isDragEnabled" class="sr-only peer">
-                <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                <input v-model="isDragEnabled" type="checkbox" class="sr-only peer">
+                <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" />
               </div>
             </label>
-            <button @click="addGroup" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-full text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">Add Group</button>
-            <button @click="addValue" class="px-5 py-2.5 text-sm font-medium rounded-full text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">Add Input</button>
+            <button class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-full text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200" @click="addGroup">Add Group</button>
+            <button class="px-5 py-2.5 text-sm font-medium rounded-full text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200" @click="addValue">Add Input</button>
           </div>
         </section>
 
         <div class="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100 dark:border-gray-700">
-          <button @click="openAll" class="flex-1 px-6 py-3 text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Open All in New Tabs</button>
-          <button @click="copyShareLink" class="px-6 py-3 border border-gray-300 dark:border-gray-600 text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{{ copied ? 'Copied!' : 'Copy Shareable Link' }}</button>
+          <button class="flex-1 px-6 py-3 text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" @click="openAll">Open All in New Tabs</button>
+          <button class="px-6 py-3 border border-gray-300 dark:border-gray-600 text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" @click="copyShareLink">{{ copied ? 'Copied!' : 'Copy Shareable Link' }}</button>
         </div>
 
         <div class="mt-4 flex justify-end">

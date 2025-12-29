@@ -1,11 +1,11 @@
-import { z, } from 'zod';
+import { z } from "zod";
 import { 
   ParamValueDtoSchema, 
   ParamGroupDtoSchema, 
   ParamItemDtoSchema, 
   AppStateDtoSchema,
   StorageStateDtoSchema,
-} from './schemas';
+} from "./schemas";
 
 // DTO Types (Persistence / Transfer) - Optimized for size
 export type ParamValueDto = Readonly<z.infer<typeof ParamValueDtoSchema>>;
@@ -22,7 +22,7 @@ export type ParamValue = {
 
 export type ParamGroup = {
   id: number,
-  readonly type: 'group',
+  readonly type: "group",
   name: string,
   values: ParamValue[],
   expanded: boolean,

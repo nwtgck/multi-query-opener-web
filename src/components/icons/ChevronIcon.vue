@@ -10,12 +10,12 @@
     class="w-5 h-5 transition-transform duration-200"
     :class="{ 'rotate-180': expanded }"
   >
-    <polyline points="6 9 12 15 18 9"></polyline>
+    <polyline points="6 9 12 15 18 9" />
   </svg>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  expanded?: boolean;
+  expanded?: boolean,
 }>();
 </script>

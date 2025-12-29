@@ -1,4 +1,4 @@
-import { z, } from 'zod';
+import { z } from "zod";
 
 /**
  * Optimized DTO for a single parameter value.
